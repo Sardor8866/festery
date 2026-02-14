@@ -1,7 +1,8 @@
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update
 from aiogram.filters.command import CommandStart
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -10,20 +11,27 @@ from aiohttp import web
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # замени на свой токен
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = "https://festery.onrender.com" + WEBHOOK_PATH  # замени на свой домен Render
+PORT = int(os.getenv('PORT', 8080))  # Render передает PORT, по умолчанию 8080
+RENDER_URL = os.getenv('RENDER_EXTERNAL_URL')  # Render сам дает свой URL
 
-# ID кастомных эмодзи (позже можно поменять)
-EMOJI_WELCOME = "5199885118214255386"  # для приветствия
-EMOJI_PROFILE = "5199885118214255386"  # для кнопки профиля
-EMOJI_PARTNERS = "5199885118214255386"  # для кнопки партнеры
-EMOJI_GAMES = "5199885118214255386"     # для кнопки игры
-EMOJI_LEADERS = "5199885118214255386"   # для кнопки лидеры
-EMOJI_ABOUT = "5199885118214255386"     # для кнопки о проекте
+if RENDER_URL:
+    WEBHOOK_URL = f"{RENDER_URL}{WEBHOOK_PATH}"
+else:
+    # Для локального тестирования (замени на свой URL)
+    WEBHOOK_URL = f"https://festery.onrender.com{WEBHOOK_PATH}"
+
+# ID кастомных эмодзи
+EMOJI_WELCOME = "5199885118214255386"
+EMOJI_PROFILE = "5199885118214255386"
+EMOJI_PARTNERS = "5199885118214255386"
+EMOJI_GAMES = "5199885118214255386"
+EMOJI_LEADERS = "5199885118214255386"
+EMOJI_ABOUT = "5199885118214255386"
 
 # Роутер
 router = Router()
 
-# Клавиатура с inline-кнопками (с кастомными эмодзи)
+# Клавиатура с inline-кнопками
 def get_main_menu():
     buttons = [
         [InlineKeyboardButton(
@@ -66,6 +74,7 @@ async def profile_callback(callback):
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
+    await callback.answer()
 
 @router.callback_query(F.data == "partners")
 async def partners_callback(callback):
@@ -74,6 +83,7 @@ async def partners_callback(callback):
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
+    await callback.answer()
 
 @router.callback_query(F.data == "games")
 async def games_callback(callback):
@@ -82,6 +92,7 @@ async def games_callback(callback):
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
+    await callback.answer()
 
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback):
@@ -90,6 +101,7 @@ async def leaders_callback(callback):
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
+    await callback.answer()
 
 @router.callback_query(F.data == "about")
 async def about_callback(callback):
@@ -98,9 +110,11 @@ async def about_callback(callback):
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
+    await callback.answer()
 
 # Основная функция
 async def main():
+    # Создаем бота и диспетчер
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
@@ -108,24 +122,48 @@ async def main():
     # Удаляем вебхук перед установкой нового
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
+    
+    logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
 
     # Запускаем aiohttp сервер для вебхуков
     app = web.Application()
     
     async def webhook_handler(request):
-        update = await request.json()
-        await dp.feed_update(bot, update)
-        return web.Response()
+        try:
+            # Получаем JSON из запроса
+            json_data = await request.json()
+            
+            # Правильно конвертируем JSON в объект Update
+            update = Update.model_validate(json_data, context={"bot": bot})
+            
+            # Передаем обновление диспетчеру
+            await dp.feed_update(bot, update)
+            
+            return web.Response(status=200)
+        except Exception as e:
+            logging.error(f"Ошибка при обработке вебхука: {e}")
+            return web.Response(status=500)
+    
+    # Добавляем обработчик для главной страницы (для проверки)
+    async def handle_index(request):
+        return web.Response(text="Бот работает!", content_type="text/html")
     
     app.router.add_post(WEBHOOK_PATH, webhook_handler)
+    app.router.add_get("/", handle_index)
+    
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, host="0.0.0.0", port=8080)
+    site = web.TCPSite(runner, host="0.0.0.0", port=PORT)
+    
+    logging.info(f"Сервер запущен на порту {PORT}")
     await site.start()
-
-    logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
-    await asyncio.Event().wait()  # держим запущенным
+    
+    # Держим приложение запущенным
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен")
