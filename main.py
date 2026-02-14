@@ -9,8 +9,8 @@ import os
 # ============================================
 # КОНФИГУРАЦИЯ - ЗАМЕНИТЕ НА СВОИ ЗНАЧЕНИЯ
 # ============================================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Вставьте токен от @BotFather
-WEBHOOK_URL = "https://your-app-name.onrender.com"  # Ваш URL на Render
+BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # Вставьте токен от @BotFather
+WEBHOOK_URL = "https://festery.onrender.com"  # Ваш URL на Render
 # ============================================
 
 # Настройка логирования
