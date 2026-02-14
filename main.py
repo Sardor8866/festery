@@ -9,7 +9,7 @@ import os
 # ============================================
 # КОНФИГУРАЦИЯ - ЗАМЕНИТЕ НА СВОИ ЗНАЧЕНИЯ
 # ============================================
-BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # Вставьте токен от @BotFather
+BOT_TOKEN = "8367850036:AAFlwAwCeCMG1fC8e1kT1pUuFCZtC1Zis4A"  # Вставьте токен от @BotFather
 WEBHOOK_URL = "https://festery.onrender.com"  # Ваш URL на Render
 # ============================================
 
