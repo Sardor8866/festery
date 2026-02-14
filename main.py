@@ -11,7 +11,7 @@ from aiohttp import web
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # замени на свой токен
 WEBHOOK_PATH = "/webhook"
-PORT = int(os.getenv('PORT', 10000))
+PORT = int(os.getenv('PORT', 8080))
 RENDER_URL = os.getenv('RENDER_EXTERNAL_URL')
 
 if RENDER_URL:
@@ -30,28 +30,33 @@ EMOJI_ABOUT = "5199885118214255386"
 # Роутер
 router = Router()
 
-# Клавиатура с inline-кнопками (с кастомными эмодзи)
+# Клавиатура с inline-кнопками (с кастомными эмодзи через icon_custom_emoji_id)
 def get_main_menu():
     buttons = [
         [InlineKeyboardButton(
-            text=f"{chr(127912)} Профиль",  # Временный эмодзи (искусство)
-            callback_data="profile"
+            text="Профиль",
+            callback_data="profile",
+            icon_custom_emoji_id=EMOJI_PROFILE
         )],
         [InlineKeyboardButton(
-            text=f"{chr(129309)} Партнёры",  # Рукопожатие
-            callback_data="partners"
+            text="Партнёры", 
+            callback_data="partners",
+            icon_custom_emoji_id=EMOJI_PARTNERS
         )],
         [InlineKeyboardButton(
-            text=f"{chr(127918)} Игры",  # Джойстик
-            callback_data="games"
+            text="Игры",
+            callback_data="games",
+            icon_custom_emoji_id=EMOJI_GAMES
         )],
         [InlineKeyboardButton(
-            text=f"{chr(127942)} Лидеры",  # Трофей
-            callback_data="leaders"
+            text="Лидеры",
+            callback_data="leaders",
+            icon_custom_emoji_id=EMOJI_LEADERS
         )],
         [InlineKeyboardButton(
-            text=f"{chr(8505)} О проекте",  # Информация
-            callback_data="about"
+            text="О проекте",
+            callback_data="about",
+            icon_custom_emoji_id=EMOJI_ABOUT
         )],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -111,7 +116,7 @@ async def about_callback(callback):
     )
     await callback.answer()
 
-# Основная функция (та же, что и в предыдущем ответе)
+# Основная функция
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
