@@ -11,13 +11,12 @@ from aiohttp import web
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # замени на свой токен
 WEBHOOK_PATH = "/webhook"
-PORT = int(os.getenv('PORT', 8080))  # Render передает PORT, по умолчанию 8080
-RENDER_URL = os.getenv('RENDER_EXTERNAL_URL')  # Render сам дает свой URL
+PORT = int(os.getenv('PORT', 10000))
+RENDER_URL = os.getenv('RENDER_EXTERNAL_URL')
 
 if RENDER_URL:
     WEBHOOK_URL = f"{RENDER_URL}{WEBHOOK_PATH}"
 else:
-    # Для локального тестирования (замени на свой URL)
     WEBHOOK_URL = f"https://festery.onrender.com{WEBHOOK_PATH}"
 
 # ID кастомных эмодзи
@@ -31,27 +30,27 @@ EMOJI_ABOUT = "5199885118214255386"
 # Роутер
 router = Router()
 
-# Клавиатура с inline-кнопками
+# Клавиатура с inline-кнопками (с кастомными эмодзи)
 def get_main_menu():
     buttons = [
         [InlineKeyboardButton(
-            text=f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль', 
+            text=f"{chr(127912)} Профиль",  # Временный эмодзи (искусство)
             callback_data="profile"
         )],
         [InlineKeyboardButton(
-            text=f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> Партнёры', 
+            text=f"{chr(129309)} Партнёры",  # Рукопожатие
             callback_data="partners"
         )],
         [InlineKeyboardButton(
-            text=f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> Игры', 
+            text=f"{chr(127918)} Игры",  # Джойстик
             callback_data="games"
         )],
         [InlineKeyboardButton(
-            text=f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> Лидеры', 
+            text=f"{chr(127942)} Лидеры",  # Трофей
             callback_data="leaders"
         )],
         [InlineKeyboardButton(
-            text=f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> О проекте', 
+            text=f"{chr(8505)} О проекте",  # Информация
             callback_data="about"
         )],
     ]
@@ -112,39 +111,29 @@ async def about_callback(callback):
     )
     await callback.answer()
 
-# Основная функция
+# Основная функция (та же, что и в предыдущем ответе)
 async def main():
-    # Создаем бота и диспетчер
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
 
-    # Удаляем вебхук перед установкой нового
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
     
     logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
 
-    # Запускаем aiohttp сервер для вебхуков
     app = web.Application()
     
     async def webhook_handler(request):
         try:
-            # Получаем JSON из запроса
             json_data = await request.json()
-            
-            # Правильно конвертируем JSON в объект Update
             update = Update.model_validate(json_data, context={"bot": bot})
-            
-            # Передаем обновление диспетчеру
             await dp.feed_update(bot, update)
-            
             return web.Response(status=200)
         except Exception as e:
             logging.error(f"Ошибка при обработке вебхука: {e}")
             return web.Response(status=500)
     
-    # Добавляем обработчик для главной страницы (для проверки)
     async def handle_index(request):
         return web.Response(text="Бот работает!", content_type="text/html")
     
@@ -158,12 +147,8 @@ async def main():
     logging.info(f"Сервер запущен на порту {PORT}")
     await site.start()
     
-    # Держим приложение запущенным
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Бот остановлен")
+    asyncio.run(main())
