@@ -45,6 +45,9 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 # Роутер
 router = Router()
 
+# Хранилище состояний пользователя (что они сейчас делают)
+user_state = {}  # user_id -> "deposit" or "withdraw"
+
 # Клавиатура главного меню
 def get_main_menu():
     buttons = [
@@ -112,7 +115,7 @@ def get_cancel_menu():
     buttons = [
         [
             InlineKeyboardButton(
-                text="◀️ Назад в профиль",
+                text="◀️ Отмена",
                 callback_data="profile"
             )
         ]
@@ -182,7 +185,11 @@ async def cmd_start(message: Message):
 # Профиль
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery):
-    days_in_project = 30  # В реальном проекте берите из БД
+    days_in_project = 30
+    
+    # Очищаем состояние пользователя
+    if callback.from_user.id in user_state:
+        del user_state[callback.from_user.id]
     
     await callback.message.edit_text(
         get_profile_text(
@@ -199,15 +206,16 @@ async def profile_callback(callback: CallbackQuery):
 # Пополнение
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery):
+    # Устанавливаем состояние - пополнение
+    user_state[callback.from_user.id] = "deposit"
+    
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
         f"Минимальная сумма: <b>{MIN_DEPOSIT} USDT</b>\n"
         f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
-        f"<i>Введите сумму пополнения цифрой (например: 10):</i>",
+        f"<i>Введите сумму пополнения цифрой:</i>",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")
-        ]])
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
@@ -226,108 +234,87 @@ async def withdraw_callback(callback: CallbackQuery):
         )
         return
     
+    # Устанавливаем состояние - вывод
+    user_state[callback.from_user.id] = "withdraw"
+    
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
         f"Минимальная сумма: <b>{MIN_WITHDRAWAL} USDT</b>\n"
         f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
         f"Вывод доступен раз в 3 минуты\n\n"
-        f"<i>Введите сумму вывода цифрой (например: 10):</i>",
+        f"<i>Введите сумму вывода цифрой:</i>",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")
-        ]])
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
 # Обработка ввода суммы
 @router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message):
-    """Определяет, пополнение это или вывод, и вызывает нужный обработчик"""
-    try:
-        amount = float(message.text)
-        balance = storage.get_balance(message.from_user.id)
-        
-        # Логика определения:
-        # Если сумма меньше минимального вывода - это пополнение
-        # Если сумма больше баланса - это пополнение
-        # Иначе - предлагаем выбрать действие
-        if amount < MIN_WITHDRAWAL or amount > balance:
-            await process_deposit(message)
-        else:
-            # Спрашиваем, хочет ли пользователь вывести или пополнить
-            buttons = [
-                [
-                    InlineKeyboardButton(text="💰 Пополнить", callback_data=f"confirm_deposit_{amount}"),
-                    InlineKeyboardButton(text="💸 Вывести", callback_data=f"confirm_withdraw_{amount}")
-                ],
-                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")]
-            ]
-            
-            await message.answer(
-                f"Сумма: <b>{amount} USDT</b>\n\n"
-                f"Вы хотите пополнить или вывести?",
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-            )
-    except ValueError:
-        await message.answer("❌ Введите число")
-
-# Подтверждение пополнения
-@router.callback_query(F.data.startswith("confirm_deposit_"))
-async def confirm_deposit(callback: CallbackQuery):
-    amount = float(callback.data.replace("confirm_deposit_", ""))
-    await callback.message.delete()
+    """Обрабатывает ввод суммы в зависимости от состояния"""
+    user_id = message.from_user.id
+    state = user_state.get(user_id)
     
-    # Создаем объект сообщения для обработчика
-    class FakeMessage:
-        def __init__(self, text, from_user, chat, answer):
-            self.text = text
-            self.from_user = from_user
-            self.chat = chat
-            self.answer = answer
-    
-    fake_msg = FakeMessage(
-        text=str(amount),
-        from_user=callback.from_user,
-        chat=callback.message.chat,
-        answer=callback.message.answer
-    )
-    
-    await process_deposit(fake_msg)
-    await callback.answer()
-
-# Подтверждение вывода
-@router.callback_query(F.data.startswith("confirm_withdraw_"))
-async def confirm_withdraw(callback: CallbackQuery):
-    amount = float(callback.data.replace("confirm_withdraw_", ""))
-    
-    # Проверяем задержку еще раз
-    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
-    if not can_withdraw:
-        minutes = wait_time // 60
-        seconds = wait_time % 60
-        await callback.answer(f"⏳ Подождите {minutes} мин {seconds} сек", show_alert=True)
+    if not state:
+        # Если нет состояния - отправляем в профиль
+        await message.answer(
+            "Сначала выберите действие в профиле",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="👤 В профиль", callback_data="profile")
+            ]])
+        )
         return
     
-    await callback.message.delete()
-    
-    # Создаем объект сообщения для обработчика
-    class FakeMessage:
-        def __init__(self, text, from_user, chat, answer):
-            self.text = text
-            self.from_user = from_user
-            self.chat = chat
-            self.answer = answer
-    
-    fake_msg = FakeMessage(
-        text=str(amount),
-        from_user=callback.from_user,
-        chat=callback.message.chat,
-        answer=callback.message.answer
-    )
-    
-    await process_withdraw(fake_msg)
-    await callback.answer()
+    try:
+        amount = float(message.text)
+        
+        if state == "deposit":
+            # Пополнение
+            if amount < MIN_DEPOSIT:
+                await message.answer(
+                    f"❌ Минимальная сумма {MIN_DEPOSIT} USDT",
+                    reply_markup=get_cancel_menu()
+                )
+                return
+            await process_deposit(message)
+            
+        elif state == "withdraw":
+            # Вывод
+            balance = storage.get_balance(user_id)
+            
+            if amount < MIN_WITHDRAWAL:
+                await message.answer(
+                    f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT",
+                    reply_markup=get_cancel_menu()
+                )
+                return
+            
+            if amount > balance:
+                await message.answer(
+                    f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT",
+                    reply_markup=get_cancel_menu()
+                )
+                return
+            
+            # Проверяем задержку еще раз
+            can_withdraw, wait_time = storage.can_withdraw(user_id)
+            if not can_withdraw:
+                minutes = wait_time // 60
+                seconds = wait_time % 60
+                await message.answer(
+                    f"⏳ Подождите {minutes} мин {seconds} сек",
+                    reply_markup=get_cancel_menu()
+                )
+                return
+            
+            await process_withdraw(message)
+            
+        # Очищаем состояние после успешной операции
+        if user_id in user_state:
+            del user_state[user_id]
+            
+    except ValueError:
+        await message.answer("❌ Введите число")
 
 # Партнёры
 @router.callback_query(F.data == "partners")
@@ -337,7 +324,9 @@ async def partners_callback(callback: CallbackQuery):
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
         f'Скоро здесь появится информация о партнёрах.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_cancel_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
@@ -349,7 +338,9 @@ async def games_callback(callback: CallbackQuery):
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
         f'Скоро здесь появятся все доступные игры.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_cancel_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
@@ -361,7 +352,9 @@ async def leaders_callback(callback: CallbackQuery):
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
         f'Скоро здесь появятся лучшие игроки.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_cancel_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
@@ -376,13 +369,19 @@ async def about_callback(callback: CallbackQuery):
         f'• Поддержка 24/7\n'
         f'• Лицензия Curacao',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_cancel_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
 # Кнопка "На главную"
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main_callback(callback: CallbackQuery):
+    # Очищаем состояние
+    if callback.from_user.id in user_state:
+        del user_state[callback.from_user.id]
+    
     await callback.message.edit_text(
         get_main_menu_text(),
         parse_mode=ParseMode.HTML,
