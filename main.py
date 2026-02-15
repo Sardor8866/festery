@@ -9,7 +9,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 
 # Настройки
-BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"  # замени на свой токен
+BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
 WEBHOOK_PATH = "/webhook"
 PORT = int(os.getenv('PORT', 8080))
 RENDER_URL = os.getenv('RENDER_EXTERNAL_URL')
@@ -26,7 +26,10 @@ EMOJI_PARTNERS = "5906986955911993888"
 EMOJI_GAMES = "5424972470023104089"
 EMOJI_LEADERS = "5440539497383087970"
 EMOJI_ABOUT = "5251203410396458957"
-EMOJI_CRYPTOBOT = "5427054176246991778"  # ID для синего кружка перед Cryptobot
+EMOJI_CRYPTOBOT = "5427054176246991778"
+
+# File ID для приветственного стикера (получен от бота)
+WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
 
 # Роутер
 router = Router()
@@ -95,15 +98,17 @@ def get_main_menu_text():
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
-# Старт - отправляем приветственный эмодзи как стикер и текстовое меню
+# Старт - отправляем стикер и меню
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
-        # Сначала отправляем кастомный эмодзи как стикер
+        # Отправляем приветственный стикер
         await message.answer_sticker(
-            sticker=EMOJI_WELCOME  # ID кастомного эмодзи
+            sticker=WELCOME_STICKER_ID
         )
-        # Затем отправляем текстовое меню
+        # Небольшая пауза между сообщениями
+        await asyncio.sleep(0.5)
+        # Отправляем текстовое меню
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
@@ -111,7 +116,7 @@ async def cmd_start(message: Message):
             disable_web_page_preview=True
         )
     except Exception as e:
-        logging.error(f"Ошибка при отправке стикера: {e}")
+        logging.error(f"Ошибка при отправке: {e}")
         # Если стикер не отправился, отправляем только текст
         await message.answer(
             get_main_menu_text(),
