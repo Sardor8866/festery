@@ -89,7 +89,7 @@ def get_main_menu_text():
 <b>Без скрытых условий, всё открыто и по-настоящему честно.</b>
 
 <tg-emoji emoji-id="5195033767969839232">⚡</tg-emoji> <b>Быстрые выплаты — моментальный вывод средств без задержек.</b>
-<tg-emoji emoji-id="5445355530111437729">💎</tg-emoji> <b>Выводы через-<a href="@CryptoBot"><tg-emoji emoji-id="5427054176246991778">🔵</tg-emoji> Cryptobot</a></b>
+<tg-emoji emoji-id="5445355530111437729">💎</tg-emoji> <b>Выводы через-<a href="https://t.me/send"><tg-emoji emoji-id="5427054176246991778">🔵</tg-emoji> Cryptobot</a></b>
 
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
@@ -97,10 +97,13 @@ def get_main_menu_text():
 # Старт
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+    photo_url = "https://iimg.su/i/gArwKT":
+    
     await message.answer(
         get_main_menu_text(),
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
+        disable_web_page_preview=True
     )
 
 # Обработчики кнопок разделов
