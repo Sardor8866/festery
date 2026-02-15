@@ -116,10 +116,13 @@ async def cmd_start(message: Message):
             disable_web_page_preview=True
         )
 
-# Обработчики кнопок разделов - обновляем существующее сообщение
+# Обработчики кнопок разделов - для сообщений с фото используем delete + answer
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery):
-    await callback.message.edit_text(
+    # Удаляем сообщение с фото
+    await callback.message.delete()
+    # Отправляем новое текстовое сообщение
+    await callback.message.answer(
         f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Раздел профиля</b>\n\n'
         f'Здесь будет отображаться информация о вашем профиле, статистика и настройки.',
         parse_mode=ParseMode.HTML,
@@ -129,7 +132,8 @@ async def profile_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "partners")
 async def partners_callback(callback: CallbackQuery):
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
         f'Список партнёров и информация о партнёрской программе появится здесь.',
         parse_mode=ParseMode.HTML,
@@ -139,7 +143,8 @@ async def partners_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "games")
 async def games_callback(callback: CallbackQuery):
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Список игр</b>\n\n'
         f'Здесь будут отображаться все доступные игры с высокими коэффициентами.',
         parse_mode=ParseMode.HTML,
@@ -149,7 +154,8 @@ async def games_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback: CallbackQuery):
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
         f'Лучшие игроки недели и их достижения будут отображаться здесь.',
         parse_mode=ParseMode.HTML,
@@ -159,7 +165,8 @@ async def leaders_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "about")
 async def about_callback(callback: CallbackQuery):
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> <b>О проекте</b>\n\n'
         f'Мы — команда профессионалов, создающая честный гемблинг с 2020 года.\n\n'
         f'• Мгновенные выплаты\n'
@@ -171,10 +178,10 @@ async def about_callback(callback: CallbackQuery):
     )
     await callback.answer()
 
-# Обработчик кнопки "На главную" - возвращаем фото (новое сообщение, так как фото нельзя добавить в edit)
+# Обработчик кнопки "На главную" - возвращаем фото
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main_callback(callback: CallbackQuery):
-    await callback.message.delete()  # Удаляем текущее сообщение без фото
+    await callback.message.delete()  # Удаляем текущее текстовое сообщение
     try:
         await callback.message.answer_photo(
             photo=PHOTO_URL,
