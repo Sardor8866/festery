@@ -278,16 +278,23 @@ async def deposit_amount(message: Message):
         
         # Отправляем сообщение с кнопкой оплаты
         sent_msg = await message.answer(
-            f"<b>💰 Счет на оплату</b>\n\n"
-            f"Сумма: <b>{amount} USDT</b>\n"
-            f"Счет действителен: <b>5 минут</b>\n\n"
-            f"<tg-emoji emoji-id=\"{EMOJI_CRYPTOBOT}\">🔵</tg-emoji> Нажмите кнопку ниже для оплаты",
+            f"<b><tg-emoji emoji-id=\"5906482735341377395">💰</tg-emoji>Счет Создан!</b>\n\n"
+            f"<tg-emoji emoji-id=\"5197434882321567830">💰</tg-emoji>: <b><code>{amount}</code></b>\n"
+            f"<tg-emoji emoji-id=\"5906598824012420908">⌛️</tg-emoji>Действует-<b>5 минут</b>\n\n"
+            f"<tg-emoji emoji-id=\"5386367538735104399">🔵</tg-emoji>Ждем оплату.",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=f"💳 Оплатить {amount} USDT", url=invoice['pay_url'])],
-                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")]
-            ])
-        )
+    [InlineKeyboardButton(
+        text=f"Оплатить", 
+        url=invoice['pay_url'],
+        icon_custom_emoji_id=EMOJI_WALLET  
+    )],
+    [InlineKeyboardButton(
+        text="Отмена", 
+        callback_data="profile",
+        icon_custom_emoji_id=EMOJI_BACK
+     ])
+])
         
         # Сохраняем информацию о сообщении
         storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
