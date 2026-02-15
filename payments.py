@@ -1,0 +1,414 @@
+import logging
+import uuid
+import asyncio
+from datetime import datetime, timedelta
+from typing import Optional, Dict
+from dataclasses import dataclass
+import aiohttp
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.enums import ParseMode
+from aiogram import Bot
+
+# Настройки Cryptobot (обязательно замените!)
+CRYPTOBOT_API_KEY = "477733:AAzooy5vcnCpJuGgTZc1Rdfbu71bqmrRMgr"  # Получить в @CryptoBot
+CRYPTOBOT_API_URL = "https://pay.crypt.bot/api"
+
+# Минимальные суммы
+MIN_DEPOSIT = 0.1
+MIN_WITHDRAWAL = 1.5
+
+# Задержка между выводами (3 минуты)
+WITHDRAWAL_COOLDOWN = 180  # секунд
+
+# Время жизни счета (5 минут)
+INVOICE_LIFETIME = 300  # секунд
+
+# Эмодзи из вашего main.py
+EMOJI_CRYPTOBOT = "5427054176246991778"
+EMOJI_WALLET = "5443127283898405358"
+EMOJI_WITHDRAWAL = "5445355530111437729"
+EMOJI_BACK = "5906771962734057347"
+EMOJI_SUCCESS = "5199436362280976367"
+EMOJI_ERROR = "5197923386472879129"
+
+payment_router = Router()
+bot: Bot = None  # Установите из main.py
+
+# Простое хранилище (в реальном проекте замените на БД)
+class Storage:
+    def __init__(self):
+        self.users: Dict[int, dict] = {}  # user_id -> {balance, last_withdrawal}
+        self.invoices: Dict[str, dict] = {}  # invoice_id -> данные счета
+        self.check_tasks: Dict[str, asyncio.Task] = {}  # задачи проверки
+        
+    def get_user(self, user_id: int) -> dict:
+        if user_id not in self.users:
+            self.users[user_id] = {
+                'balance': 1000.0,  # Тестовый баланс, уберите в реале
+                'last_withdrawal': None
+            }
+        return self.users[user_id]
+    
+    def get_balance(self, user_id: int) -> float:
+        return self.get_user(user_id)['balance']
+    
+    def add_balance(self, user_id: int, amount: float):
+        self.get_user(user_id)['balance'] += amount
+    
+    def deduct_balance(self, user_id: int, amount: float) -> bool:
+        user = self.get_user(user_id)
+        if user['balance'] >= amount:
+            user['balance'] -= amount
+            return True
+        return False
+    
+    def can_withdraw(self, user_id: int) -> tuple[bool, Optional[int]]:
+        """Проверка задержки 3 минуты"""
+        user = self.get_user(user_id)
+        last = user['last_withdrawal']
+        
+        if not last:
+            return True, None
+        
+        seconds = (datetime.now() - last).total_seconds()
+        if seconds < WITHDRAWAL_COOLDOWN:
+            return False, int(WITHDRAWAL_COOLDOWN - seconds)
+        return True, None
+    
+    def set_last_withdrawal(self, user_id: int):
+        self.get_user(user_id)['last_withdrawal'] = datetime.now()
+    
+    def create_invoice(self, user_id: int, amount: float, crypto_id: int, pay_url: str) -> str:
+        """Создает счет и запускает проверку"""
+        invoice_id = str(uuid.uuid4())
+        expires_at = datetime.now() + timedelta(seconds=INVOICE_LIFETIME)
+        
+        self.invoices[invoice_id] = {
+            'user_id': user_id,
+            'amount': amount,
+            'crypto_id': crypto_id,
+            'pay_url': pay_url,
+            'expires_at': expires_at,
+            'status': 'pending',
+            'message_id': None,
+            'chat_id': None
+        }
+        
+        return invoice_id
+    
+    def get_invoice(self, invoice_id: str) -> Optional[dict]:
+        return self.invoices.get(invoice_id)
+    
+    def update_invoice_status(self, invoice_id: str, status: str):
+        if invoice_id in self.invoices:
+            self.invoices[invoice_id]['status'] = status
+    
+    def set_message_info(self, invoice_id: str, chat_id: int, message_id: int):
+        if invoice_id in self.invoices:
+            self.invoices[invoice_id]['chat_id'] = chat_id
+            self.invoices[invoice_id]['message_id'] = message_id
+
+# API Cryptobot
+class CryptoBotAPI:
+    def __init__(self, token: str):
+        self.token = token
+        self.headers = {"Crypto-Pay-API-Token": token}
+    
+    async def create_invoice(self, amount: float) -> Optional[dict]:
+        """Создает счет на оплату"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/createInvoice",
+                    headers=self.headers,
+                    json={
+                        "asset": "USDT",
+                        "amount": str(amount),
+                        "expires_in": INVOICE_LIFETIME
+                    }
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('result') if data.get('ok') else None
+            except Exception as e:
+                logging.error(f"Ошибка создания счета: {e}")
+            return None
+    
+    async def get_invoice_status(self, invoice_id: int) -> Optional[str]:
+        """Проверяет статус счета"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/getInvoices",
+                    headers=self.headers,
+                    json={"invoice_ids": [invoice_id]}
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get('ok') and data.get('result', {}).get('items'):
+                        return data['result']['items'][0].get('status')
+            except Exception as e:
+                logging.error(f"Ошибка проверки статуса: {e}")
+            return None
+    
+    async def create_check(self, amount: float, user_id: int) -> Optional[dict]:
+        """Создает чек на выплату"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/createCheck",
+                    headers=self.headers,
+                    json={
+                        "asset": "USDT",
+                        "amount": str(amount),
+                        "pin_to_user_id": str(user_id)
+                    }
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('result') if data.get('ok') else None
+            except Exception as e:
+                logging.error(f"Ошибка создания чека: {e}")
+            return None
+
+# Инициализация
+storage = Storage()
+crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
+
+# Функция автоматической проверки оплаты
+async def check_payment_task(invoice_id: str):
+    """Проверяет оплату каждые 2 секунды"""
+    try:
+        invoice = storage.get_invoice(invoice_id)
+        if not invoice:
+            return
+        
+        # Проверяем 5 минут (300 секунд / 2 = 150 попыток)
+        for attempt in range(150):
+            # Проверяем, не истек ли срок
+            if datetime.now() > invoice['expires_at']:
+                await bot.edit_message_text(
+                    f"<tg-emoji emoji-id=\"{EMOJI_ERROR}\">❌</tg-emoji> <b>Счет истек</b>\n\n"
+                    f"Время оплаты вышло. Попробуйте снова.",
+                    parse_mode=ParseMode.HTML,
+                    chat_id=invoice['chat_id'],
+                    message_id=invoice['message_id'],
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                    ]])
+                )
+                storage.update_invoice_status(invoice_id, 'expired')
+                return
+            
+            # Проверяем статус в Cryptobot
+            status = await crypto_api.get_invoice_status(invoice['crypto_id'])
+            
+            if status == 'paid':
+                # Зачисляем баланс
+                storage.add_balance(invoice['user_id'], invoice['amount'])
+                
+                await bot.edit_message_text(
+                    f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Оплата получена!</b>\n\n"
+                    f"Сумма <b>{invoice['amount']} USDT</b> зачислена на ваш баланс.",
+                    parse_mode=ParseMode.HTML,
+                    chat_id=invoice['chat_id'],
+                    message_id=invoice['message_id'],
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                    ]])
+                )
+                storage.update_invoice_status(invoice_id, 'paid')
+                return
+            
+            # Ждем 2 секунды перед следующей проверкой
+            await asyncio.sleep(2)
+            
+    except Exception as e:
+        logging.error(f"Ошибка в задаче проверки: {e}")
+    finally:
+        # Удаляем задачу из словаря
+        if invoice_id in storage.check_tasks:
+            del storage.check_tasks[invoice_id]
+
+# ========== ПОПОЛНЕНИЕ ==========
+@payment_router.callback_query(F.data == "deposit")
+async def deposit_start(callback: CallbackQuery):
+    """Начало пополнения - запрос суммы"""
+    await callback.message.edit_text(
+        f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
+        f"Минимальная сумма: {MIN_DEPOSIT} USDT\n"
+        f"Ваш баланс: {storage.get_balance(callback.from_user.id):.2f} USDT\n\n"
+        f"<i>Введите сумму пополнения цифрой:</i>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")
+        ]])
+    )
+    await callback.answer()
+
+@payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
+async def deposit_amount(message: Message):
+    """Обработка введенной суммы"""
+    try:
+        amount = float(message.text)
+        
+        if amount < MIN_DEPOSIT:
+            await message.answer(
+                f"❌ Минимальная сумма {MIN_DEPOSIT} USDT",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="deposit")
+                ]])
+            )
+            return
+        
+        # Создаем счет в Cryptobot
+        invoice = await crypto_api.create_invoice(amount)
+        
+        if not invoice or 'pay_url' not in invoice:
+            await message.answer(
+                "❌ Ошибка создания счета. Попробуйте позже.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ В меню", callback_data="back_to_main")
+                ]])
+            )
+            return
+        
+        # Сохраняем счет
+        invoice_id = storage.create_invoice(
+            message.from_user.id,
+            amount,
+            invoice['invoice_id'],
+            invoice['pay_url']
+        )
+        
+        # Отправляем сообщение с кнопкой оплаты
+        sent_msg = await message.answer(
+            f"<b>💰 Счет на оплату</b>\n\n"
+            f"Сумма: <b>{amount} USDT</b>\n"
+            f"Счет действителен: <b>5 минут</b>\n\n"
+            f"<tg-emoji emoji-id=\"{EMOJI_CRYPTOBOT}\">🔵</tg-emoji> Нажмите кнопку ниже для оплаты",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"💳 Оплатить {amount} USDT", url=invoice['pay_url'])],
+                [InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")]
+            ])
+        )
+        
+        # Сохраняем информацию о сообщении
+        storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
+        
+        # Запускаем автоматическую проверку
+        if invoice_id not in storage.check_tasks:
+            task = asyncio.create_task(check_payment_task(invoice_id))
+            storage.check_tasks[invoice_id] = task
+        
+    except ValueError:
+        await message.answer("❌ Введите число")
+
+# ========== ВЫВОД ==========
+@payment_router.callback_query(F.data == "withdraw")
+async def withdraw_start(callback: CallbackQuery):
+    """Начало вывода - проверка задержки и запрос суммы"""
+    # Проверяем задержку
+    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
+    
+    if not can_withdraw:
+        minutes = wait_time // 60
+        seconds = wait_time % 60
+        await callback.answer(
+            f"⏳ Подождите {minutes} мин {seconds} сек", 
+            show_alert=True
+        )
+        return
+    
+    await callback.message.edit_text(
+        f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
+        f"Минимальная сумма: {MIN_WITHDRAWAL} USDT\n"
+        f"Ваш баланс: {storage.get_balance(callback.from_user.id):.2f} USDT\n\n"
+        f"<i>Введите сумму вывода цифрой:</i>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")
+        ]])
+    )
+    await callback.answer()
+
+@payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
+async def withdraw_amount(message: Message):
+    """Обработка суммы вывода"""
+    try:
+        amount = float(message.text)
+        user_id = message.from_user.id
+        balance = storage.get_balance(user_id)
+        
+        # Проверки
+        if amount < MIN_WITHDRAWAL:
+            await message.answer(
+                f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="withdraw")
+                ]])
+            )
+            return
+        
+        if amount > balance:
+            await message.answer(
+                f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="withdraw")
+                ]])
+            )
+            return
+        
+        # Проверяем задержку еще раз
+        can_withdraw, wait_time = storage.can_withdraw(user_id)
+        if not can_withdraw:
+            minutes = wait_time // 60
+            seconds = wait_time % 60
+            await message.answer(
+                f"⏳ Подождите {minutes} мин {seconds} сек",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                ]])
+            )
+            return
+        
+        # Создаем чек в Cryptobot
+        check = await crypto_api.create_check(amount, user_id)
+        
+        if not check or 'check_url' not in check:
+            await message.answer(
+                "❌ Ошибка создания чека. Попробуйте позже.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                ]])
+            )
+            return
+        
+        # Списываем баланс
+        storage.deduct_balance(user_id, amount)
+        storage.set_last_withdrawal(user_id)
+        
+        # Отправляем чек
+        buttons = [
+            [InlineKeyboardButton(text="💸 Получить чек", url=check['check_url'])],
+            [InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")]
+        ]
+        
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Чек создан!</b>\n\n"
+            f"Сумма: <b>{amount} USDT</b>\n"
+            f"Новый баланс: <b>{storage.get_balance(user_id):.2f} USDT</b>\n\n"
+            f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+        
+    except ValueError:
+        await message.answer("❌ Введите число")
+
+# Функция для установки bot из main.py
+def setup_payments(bot_instance: Bot):
+    global bot
+    bot = bot_instance
