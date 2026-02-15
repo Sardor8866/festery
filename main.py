@@ -114,9 +114,10 @@ def get_profile_menu():
 def get_cancel_menu():
     buttons = [
         [
-            InlineKeyboardButton(
-                text="◀️ Отмена",
-                callback_data="profile"
+            [InlineKeyboardButton(
+                text="Отмена", 
+                callback_data="profile",
+                icon_custom_emoji_id=EMOJI_BACK
             )
         ]
     ]
@@ -211,9 +212,7 @@ async def deposit_callback(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"Минимальная сумма: <b>{MIN_DEPOSIT} USDT</b>\n"
-        f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
-        f"<i>Введите сумму пополнения цифрой:</i>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942">💰</tg-emoji>Введите сумму пополнения:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
