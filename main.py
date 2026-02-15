@@ -195,7 +195,7 @@ async def profile_callback(callback: CallbackQuery):
     await callback.message.edit_text(
         get_profile_text(callback.from_user.first_name, days_in_project),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_profile_menu()
+        reply_markup=get_profile_menu(),
         disable_web_page_preview=True
     )
     await callback.answer()
