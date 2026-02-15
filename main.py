@@ -98,7 +98,7 @@ def get_main_menu_text():
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     # Исправленная прямая ссылка на изображение
-    photo_url = "https://iimg.su/s/35/gArwKT.jpg"  # Прямая ссылка на изображение
+    photo_url = "https://i.postimg.cc/J7BK1X6H/Chat-GPT-Image-15-fevr-2026-g-09-22-45.png"  # Прямая ссылка на изображение
     
     try:
         await message.answer_photo(
