@@ -110,16 +110,14 @@ def get_profile_menu():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# Клавиатура для отмены
+# Клавиатура для отмены (ИСПРАВЛЕНО)
 def get_cancel_menu():
     buttons = [
-        [
-            [InlineKeyboardButton(
-                text="Отмена", 
-                callback_data="profile",
-                icon_custom_emoji_id=EMOJI_BACK
-            )
-        ]
+        [InlineKeyboardButton(
+            text="◀️ Отмена", 
+            callback_data="profile",
+            icon_custom_emoji_id=EMOJI_BACK
+        )]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -212,7 +210,7 @@ async def deposit_callback(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💰</tg-emoji>Введите сумму пополнения:</i></blockquote>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💰</tg-emoji> Введите сумму пополнения:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
