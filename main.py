@@ -147,11 +147,10 @@ def get_profile_text(user_first_name, days_in_project):
         days_text = "дней"
     
     return f"""
-<blockquote><b><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji>Профиль</b></blockquote>
-
+<blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="{EMOJI_WALLET}">💰</tg-emoji>: <b><code>{balance:,.2f}</code></b></b>
+<b><tg-emoji emoji-id="{EMOJI_WALLET}">💰</tg-emoji> Баланс: <code>{balance:,.2f}</code></b>
 </blockquote>
 
 <blockquote>
