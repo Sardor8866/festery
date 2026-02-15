@@ -97,12 +97,13 @@ def get_main_menu_text():
 # Старт
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    photo_url = "https://iimg.su/i/gArwKT":
+    photo_url = "https://iimg.su/i/gArwKT"  
     
-    await message.answer(
-        get_main_menu_text(),
+    await message.answer_photo(  
+        photo=photo_url,
+        caption=get_main_menu_text(),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(),  
         disable_web_page_preview=True
     )
 
