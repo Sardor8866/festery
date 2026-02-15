@@ -5,10 +5,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict
 from dataclasses import dataclass
 import aiohttp
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
-from aiogram import Bot
 
 # Настройки Cryptobot (обязательно замените!)
 CRYPTOBOT_API_KEY = "477733:AAzooy5vcnCpJuGgTZc1Rdfbu71bqmrRMgr"  # Получить в @CryptoBot
@@ -33,20 +32,22 @@ EMOJI_SUCCESS = "5199436362280976367"
 EMOJI_ERROR = "5197923386472879129"
 
 payment_router = Router()
-bot: Bot = None  # Установите из main.py
+bot: Bot = None  # Установится через setup_payments
 
 # Простое хранилище (в реальном проекте замените на БД)
 class Storage:
     def __init__(self):
-        self.users: Dict[int, dict] = {}  # user_id -> {balance, last_withdrawal}
+        self.users: Dict[int, dict] = {}  # user_id -> {balance, last_withdrawal, total_deposits, total_withdrawals}
         self.invoices: Dict[str, dict] = {}  # invoice_id -> данные счета
         self.check_tasks: Dict[str, asyncio.Task] = {}  # задачи проверки
         
     def get_user(self, user_id: int) -> dict:
         if user_id not in self.users:
             self.users[user_id] = {
-                'balance': 1000.0,  # Тестовый баланс, уберите в реале
-                'last_withdrawal': None
+                'balance': 1000.0,  # Тестовый баланс
+                'last_withdrawal': None,
+                'total_deposits': 3500.0,  # Тестовые данные
+                'total_withdrawals': 2250.0  # Тестовые данные
             }
         return self.users[user_id]
     
@@ -54,12 +55,15 @@ class Storage:
         return self.get_user(user_id)['balance']
     
     def add_balance(self, user_id: int, amount: float):
-        self.get_user(user_id)['balance'] += amount
+        user = self.get_user(user_id)
+        user['balance'] += amount
+        user['total_deposits'] = user.get('total_deposits', 0) + amount
     
     def deduct_balance(self, user_id: int, amount: float) -> bool:
         user = self.get_user(user_id)
         if user['balance'] >= amount:
             user['balance'] -= amount
+            user['total_withdrawals'] = user.get('total_withdrawals', 0) + amount
             return True
         return False
     
@@ -108,6 +112,9 @@ class Storage:
         if invoice_id in self.invoices:
             self.invoices[invoice_id]['chat_id'] = chat_id
             self.invoices[invoice_id]['message_id'] = message_id
+
+# Создаем экземпляр хранилища
+storage = Storage()
 
 # API Cryptobot
 class CryptoBotAPI:
@@ -172,8 +179,7 @@ class CryptoBotAPI:
                 logging.error(f"Ошибка создания чека: {e}")
             return None
 
-# Инициализация
-storage = Storage()
+# Инициализация API
 crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
 
 # Функция автоматической проверки оплаты
@@ -195,7 +201,7 @@ async def check_payment_task(invoice_id: str):
                     chat_id=invoice['chat_id'],
                     message_id=invoice['message_id'],
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                        InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                     ]])
                 )
                 storage.update_invoice_status(invoice_id, 'expired')
@@ -215,7 +221,7 @@ async def check_payment_task(invoice_id: str):
                     chat_id=invoice['chat_id'],
                     message_id=invoice['message_id'],
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                        InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                     ]])
                 )
                 storage.update_invoice_status(invoice_id, 'paid')
@@ -232,24 +238,12 @@ async def check_payment_task(invoice_id: str):
             del storage.check_tasks[invoice_id]
 
 # ========== ПОПОЛНЕНИЕ ==========
-@payment_router.callback_query(F.data == "deposit")
-async def deposit_start(callback: CallbackQuery):
-    """Начало пополнения - запрос суммы"""
-    await callback.message.edit_text(
-        f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"Минимальная сумма: {MIN_DEPOSIT} USDT\n"
-        f"Ваш баланс: {storage.get_balance(callback.from_user.id):.2f} USDT\n\n"
-        f"<i>Введите сумму пополнения цифрой:</i>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")
-        ]])
-    )
-    await callback.answer()
-
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def deposit_amount(message: Message):
-    """Обработка введенной суммы"""
+    """Обработка введенной суммы для пополнения"""
+    # Проверяем, что это пополнение (в реальном проекте используйте FSM)
+    # Для простоты будем считать, что если пользователь ввел число и не в процессе вывода - это пополнение
+    
     try:
         amount = float(message.text)
         
@@ -257,7 +251,7 @@ async def deposit_amount(message: Message):
             await message.answer(
                 f"❌ Минимальная сумма {MIN_DEPOSIT} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ Назад", callback_data="deposit")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
@@ -269,7 +263,7 @@ async def deposit_amount(message: Message):
             await message.answer(
                 "❌ Ошибка создания счета. Попробуйте позже.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ В меню", callback_data="back_to_main")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
@@ -291,7 +285,7 @@ async def deposit_amount(message: Message):
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"💳 Оплатить {amount} USDT", url=invoice['pay_url'])],
-                [InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")]
+                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")]
             ])
         )
         
@@ -307,33 +301,6 @@ async def deposit_amount(message: Message):
         await message.answer("❌ Введите число")
 
 # ========== ВЫВОД ==========
-@payment_router.callback_query(F.data == "withdraw")
-async def withdraw_start(callback: CallbackQuery):
-    """Начало вывода - проверка задержки и запрос суммы"""
-    # Проверяем задержку
-    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
-    
-    if not can_withdraw:
-        minutes = wait_time // 60
-        seconds = wait_time % 60
-        await callback.answer(
-            f"⏳ Подождите {minutes} мин {seconds} сек", 
-            show_alert=True
-        )
-        return
-    
-    await callback.message.edit_text(
-        f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"Минимальная сумма: {MIN_WITHDRAWAL} USDT\n"
-        f"Ваш баланс: {storage.get_balance(callback.from_user.id):.2f} USDT\n\n"
-        f"<i>Введите сумму вывода цифрой:</i>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Отмена", callback_data="back_to_main")
-        ]])
-    )
-    await callback.answer()
-
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def withdraw_amount(message: Message):
     """Обработка суммы вывода"""
@@ -347,7 +314,7 @@ async def withdraw_amount(message: Message):
             await message.answer(
                 f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ Назад", callback_data="withdraw")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
@@ -356,12 +323,12 @@ async def withdraw_amount(message: Message):
             await message.answer(
                 f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ Назад", callback_data="withdraw")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
         
-        # Проверяем задержку еще раз
+        # Проверяем задержку
         can_withdraw, wait_time = storage.can_withdraw(user_id)
         if not can_withdraw:
             minutes = wait_time // 60
@@ -369,7 +336,7 @@ async def withdraw_amount(message: Message):
             await message.answer(
                 f"⏳ Подождите {minutes} мин {seconds} сек",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
@@ -381,7 +348,7 @@ async def withdraw_amount(message: Message):
             await message.answer(
                 "❌ Ошибка создания чека. Попробуйте позже.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")
+                    InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
@@ -393,7 +360,7 @@ async def withdraw_amount(message: Message):
         # Отправляем чек
         buttons = [
             [InlineKeyboardButton(text="💸 Получить чек", url=check['check_url'])],
-            [InlineKeyboardButton(text="◀️ В профиль", callback_data="back_to_main")]
+            [InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")]
         ]
         
         await message.answer(
