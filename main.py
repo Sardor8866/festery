@@ -9,6 +9,9 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 
+# Импортируем модуль платежей
+from payments import payment_router, setup_payments, storage
+
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
 WEBHOOK_PATH = "/webhook"
@@ -32,7 +35,7 @@ EMOJI_BACK = "5906771962734057347"
 EMOJI_DEVELOPMENT = "5445355530111437729"
 EMOJI_WALLET = "5443127283898405358"
 EMOJI_STATS = "5197288647275071607"
-EMOJI_WITHDrAWAL = "5445355530111437729"
+EMOJI_WITHDRAWAL = "5445355530111437729"
 
 # File ID для приветственного стикера
 WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
@@ -40,10 +43,9 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 # Роутер
 router = Router()
 
-# Клавиатура главного меню (расположение: 2+2+1)
+# Клавиатура главного меню
 def get_main_menu():
     buttons = [
-        # Первый ряд: 2 кнопки
         [
             InlineKeyboardButton(
                 text="Профиль",
@@ -56,7 +58,6 @@ def get_main_menu():
                 icon_custom_emoji_id=EMOJI_PARTNERS
             )
         ],
-        # Второй ряд: 2 кнопки
         [
             InlineKeyboardButton(
                 text="Игры",
@@ -69,7 +70,6 @@ def get_main_menu():
                 icon_custom_emoji_id=EMOJI_LEADERS
             )
         ],
-        # Третий ряд: 1 кнопка
         [
             InlineKeyboardButton(
                 text="О проекте",
@@ -80,7 +80,7 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# Клавиатура для профиля (кнопки с кастомными эмодзи)
+# Клавиатура для профиля
 def get_profile_menu():
     buttons = [
         [
@@ -92,7 +92,7 @@ def get_profile_menu():
             InlineKeyboardButton(
                 text="Вывести",
                 callback_data="withdraw",
-                icon_custom_emoji_id=EMOJI_WITHDrAWAL
+                icon_custom_emoji_id=EMOJI_WITHDRAWAL
             )
         ],
         [
@@ -105,14 +105,13 @@ def get_profile_menu():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# Клавиатура для остальных разделов
-def get_back_menu():
+# Клавиатура для отмены
+def get_cancel_menu():
     buttons = [
         [
             InlineKeyboardButton(
-                text="На главную",
-                callback_data="back_to_main",
-                icon_custom_emoji_id=EMOJI_BACK
+                text="◀️ Назад в профиль",
+                callback_data="profile"
             )
         ]
     ]
@@ -130,12 +129,12 @@ def get_main_menu_text():
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
-# Красивый профиль
-def get_profile_text(user_first_name, days_in_project):
-    # Пример данных (в реальном боте нужно брать из БД)
-    balance = 1250.50
-    total_deposits = 3500.00
-    total_withdrawals = 2250.00
+# Профиль с реальным балансом из storage
+def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
+    balance = storage.get_balance(user_id)
+    user_data = storage.get_user(user_id)
+    total_deposits = user_data.get('total_deposits', balance * 0.7)  # Пример
+    total_withdrawals = user_data.get('total_withdrawals', balance * 0.3)  # Пример
     
     # Склонение слова "день"
     if 11 <= days_in_project <= 19:
@@ -151,7 +150,7 @@ def get_profile_text(user_first_name, days_in_project):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji><code>{balance:,.2f}</code></b>
+<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji> <code>{balance:,.2f}</code> USDT</b>
 <tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
 <tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
 <tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
@@ -160,15 +159,11 @@ def get_profile_text(user_first_name, days_in_project):
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
-# Старт - отправляем стикер и меню
+# Старт
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
-        # Отправляем приветственный стикер
-        await message.answer_sticker(
-            sticker=WELCOME_STICKER_ID
-        )
-        # Отправляем текстовое меню
+        await message.answer_sticker(sticker=WELCOME_STICKER_ID)
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
@@ -176,7 +171,6 @@ async def cmd_start(message: Message):
         )
     except Exception as e:
         logging.error(f"Ошибка при отправке: {e}")
-        # Если стикер не отправился, отправляем только текст
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
@@ -186,39 +180,63 @@ async def cmd_start(message: Message):
 # Профиль
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery):
-    # Для примера берем 30 дней
-    # В реальном боте нужно хранить дату регистрации в БД
-    days_in_project = 30
+    days_in_project = 30  # В реальном проекте берите из БД
     
     await callback.message.edit_text(
-        get_profile_text(callback.from_user.first_name, days_in_project),
+        get_profile_text(
+            callback.from_user.first_name, 
+            days_in_project,
+            callback.from_user.id
+        ),
         parse_mode=ParseMode.HTML,
         reply_markup=get_profile_menu(),
         disable_web_page_preview=True
     )
     await callback.answer()
 
-# Пополнение (в разработке)
+# Пополнение - теперь работает через payments.py
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery):
+    """Перенаправляем на пополнение из payments.py"""
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<tg-emoji emoji-id=\"{EMOJI_DEVELOPMENT}\">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n"
-        f"Скоро здесь появится возможность пополнения баланса через Cryptobot.",
+        f"Минимальная сумма: <b>0.1 USDT</b>\n"
+        f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
+        f"<i>Введите сумму пополнения цифрой (например: 10):</i>",
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
-# Вывод (в разработке)
+# Вывод - теперь работает через payments.py
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery):
+    """Перенаправляем на вывод из payments.py"""
+    # Проверяем задержку
+    from payments import payment_system
+    can_withdraw, wait_time = payment_system.can_withdraw(callback.from_user.id)
+    
+    if not can_withdraw:
+        minutes = wait_time // 60
+        seconds = wait_time % 60
+        await callback.answer(
+            f"⏳ Подождите {minutes} мин {seconds} сек", 
+            show_alert=True
+        )
+        return
+    
     await callback.message.edit_text(
-        f"<b><tg-emoji emoji-id=\"{EMOJI_CRYPTOBOT}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<tg-emoji emoji-id=\"{EMOJI_DEVELOPMENT}\">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n"
-        f"Скоро здесь появится возможность вывода средств через Cryptobot.",
+        f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
+        f"Минимальная сумма: <b>1.5 USDT</b>\n"
+        f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
+        f"Вывод доступен раз в 3 минуты\n\n"
+        f"<i>Введите сумму вывода цифрой (например: 10):</i>",
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")
+        ]])
     )
     await callback.answer()
 
@@ -228,9 +246,9 @@ async def partners_callback(callback: CallbackQuery):
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
-        f'Скоро здесь появится информация о партнёрах и партнёрской программе.',
+        f'Скоро здесь появится информация о партнёрах.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
@@ -240,9 +258,9 @@ async def games_callback(callback: CallbackQuery):
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Список игр</b>\n\n'
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
-        f'Скоро здесь появятся все доступные игры с высокими коэффициентами.',
+        f'Скоро здесь появятся все доступные игры.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
@@ -252,9 +270,9 @@ async def leaders_callback(callback: CallbackQuery):
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
-        f'Скоро здесь появятся лучшие игроки недели и их достижения.',
+        f'Скоро здесь появятся лучшие игроки.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
@@ -269,7 +287,7 @@ async def about_callback(callback: CallbackQuery):
         f'• Поддержка 24/7\n'
         f'• Лицензия Curacao',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_back_menu()
+        reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
@@ -287,13 +305,21 @@ async def back_to_main_callback(callback: CallbackQuery):
 async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
+    
+    # Подключаем роутеры
     dp.include_router(router)
+    dp.include_router(payment_router)
+    
+    # Настраиваем платежи (передаем bot)
+    setup_payments(bot)
 
+    # Удаляем старый вебхук и устанавливаем новый
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
     
     logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
 
+    # Создаем веб-приложение для вебхуков
     app = web.Application()
     
     async def webhook_handler(request):
@@ -312,6 +338,7 @@ async def main():
     app.router.add_post(WEBHOOK_PATH, webhook_handler)
     app.router.add_get("/", handle_index)
     
+    # Запускаем сервер
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=PORT)
@@ -319,6 +346,7 @@ async def main():
     logging.info(f"Сервер запущен на порту {PORT}")
     await site.start()
     
+    # Ждем бесконечно
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
