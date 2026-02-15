@@ -30,7 +30,7 @@ EMOJI_ABOUT = "5251203410396458957"
 # Роутер
 router = Router()
 
-# Клавиатура с inline-кнопками (расположение: 2+2+1)
+# Клавиатура главного меню (расположение: 2+2+1)
 def get_main_menu():
     buttons = [
         # Первый ряд: 2 кнопки
@@ -59,21 +59,32 @@ def get_main_menu():
                 icon_custom_emoji_id=EMOJI_LEADERS
             )
         ],
-        # Третий ряд: 1 кнопка (растянутая на всю ширину)
+        # Третий ряд: 1 кнопка
         [
             InlineKeyboardButton(
                 text="О проекте",
                 callback_data="about",
                 icon_custom_emoji_id=EMOJI_ABOUT
             )
-        ],
+        ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# Старт с красивым приветствием
-@router.message(CommandStart())
-async def cmd_start(message: Message):
-    welcome_text = """
+# Клавиатура для разделов (только кнопка "На главную")
+def get_back_menu():
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="◀️ На главную",
+                callback_data="back_to_main"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+# Текст главного меню
+def get_main_menu_text():
+    return """
 <b>🎰 Добро пожаловать в мир честного гемблинга!</b>
 
 <blockquote>
@@ -89,54 +100,76 @@ async def cmd_start(message: Message):
 
 <i>Присоединяйся к тысячам игроков, которые уже оценили наш сервис!</i>
     """
-    
+
+# Старт
+@router.message(CommandStart())
+async def cmd_start(message: Message):
     await message.answer(
-        welcome_text,
+        get_main_menu_text(),
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
 
-# Обработчики кнопок
+# Обработчики кнопок разделов
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback):
     await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Раздел профиля (в разработке)',
+        f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Раздел профиля</b>\n\n'
+        f'Здесь будет отображаться информация о вашем профиле, статистика и настройки.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
+        reply_markup=get_back_menu()
     )
     await callback.answer()
 
 @router.callback_query(F.data == "partners")
 async def partners_callback(callback):
     await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> Наши партнёры (в разработке)',
+        f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
+        f'Список партнёров и информация о партнёрской программе появится здесь.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
+        reply_markup=get_back_menu()
     )
     await callback.answer()
 
 @router.callback_query(F.data == "games")
 async def games_callback(callback):
     await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> Список игр (в разработке)',
+        f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Список игр</b>\n\n'
+        f'Здесь будут отображаться все доступные игры с высокими коэффициентами.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
+        reply_markup=get_back_menu()
     )
     await callback.answer()
 
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback):
     await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> Таблица лидеров (в разработке)',
+        f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
+        f'Лучшие игроки недели и их достижения будут отображаться здесь.',
         parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
+        reply_markup=get_back_menu()
     )
     await callback.answer()
 
 @router.callback_query(F.data == "about")
 async def about_callback(callback):
     await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> О проекте (в разработке)',
+        f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> <b>О проекте</b>\n\n'
+        f'Мы — команда профессионалов, создающая честный гемблинг с 2020 года.\n\n'
+        f'• Мгновенные выплаты\n'
+        f'• Прозрачные алгоритмы\n'
+        f'• Поддержка 24/7\n'
+        f'• Лицензия Curacao',
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_back_menu()
+    )
+    await callback.answer()
+
+# Обработчик кнопки "На главную"
+@router.callback_query(F.data == "back_to_main")
+async def back_to_main_callback(callback):
+    await callback.message.edit_text(
+        get_main_menu_text(),
         parse_mode=ParseMode.HTML,
         reply_markup=get_main_menu()
     )
