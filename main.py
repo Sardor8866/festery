@@ -151,7 +151,7 @@ def get_profile_text(user_first_name, days_in_project):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji>: <code>{balance:,.2f}</code></b>
+<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji><code>{balance:,.2f}</code></b>
 <tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
 <tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
 <tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
