@@ -10,7 +10,9 @@ from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 
 # Импортируем модуль платежей
-from payments import payment_router, setup_payments, storage
+from payments import payment_router, setup_payments, storage, MIN_DEPOSIT, MIN_WITHDRAWAL
+from payments import deposit_amount as process_deposit
+from payments import withdraw_amount as process_withdraw
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -133,8 +135,8 @@ def get_main_menu_text():
 def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
     balance = storage.get_balance(user_id)
     user_data = storage.get_user(user_id)
-    total_deposits = user_data.get('total_deposits', balance * 0.7)  # Пример
-    total_withdrawals = user_data.get('total_withdrawals', balance * 0.3)  # Пример
+    total_deposits = user_data.get('total_deposits', balance * 0.7)
+    total_withdrawals = user_data.get('total_withdrawals', balance * 0.3)
     
     # Склонение слова "день"
     if 11 <= days_in_project <= 19:
@@ -194,13 +196,12 @@ async def profile_callback(callback: CallbackQuery):
     )
     await callback.answer()
 
-# Пополнение - теперь работает через payments.py
+# Пополнение
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery):
-    """Перенаправляем на пополнение из payments.py"""
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"Минимальная сумма: <b>0.1 USDT</b>\n"
+        f"Минимальная сумма: <b>{MIN_DEPOSIT} USDT</b>\n"
         f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
         f"<i>Введите сумму пополнения цифрой (например: 10):</i>",
         parse_mode=ParseMode.HTML,
@@ -210,13 +211,11 @@ async def deposit_callback(callback: CallbackQuery):
     )
     await callback.answer()
 
-# Вывод - теперь работает через payments.py
+# Вывод
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery):
-    """Перенаправляем на вывод из payments.py"""
     # Проверяем задержку
-    from payments import payment_system
-    can_withdraw, wait_time = payment_system.can_withdraw(callback.from_user.id)
+    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
     
     if not can_withdraw:
         minutes = wait_time // 60
@@ -229,7 +228,7 @@ async def withdraw_callback(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"Минимальная сумма: <b>1.5 USDT</b>\n"
+        f"Минимальная сумма: <b>{MIN_WITHDRAWAL} USDT</b>\n"
         f"Ваш баланс: <b>{storage.get_balance(callback.from_user.id):.2f} USDT</b>\n\n"
         f"Вывод доступен раз в 3 минуты\n\n"
         f"<i>Введите сумму вывода цифрой (например: 10):</i>",
@@ -238,6 +237,96 @@ async def withdraw_callback(callback: CallbackQuery):
             InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")
         ]])
     )
+    await callback.answer()
+
+# Обработка ввода суммы
+@router.message(F.text.regexp(r'^\d+\.?\d*$'))
+async def handle_amount_input(message: Message):
+    """Определяет, пополнение это или вывод, и вызывает нужный обработчик"""
+    try:
+        amount = float(message.text)
+        balance = storage.get_balance(message.from_user.id)
+        
+        # Логика определения:
+        # Если сумма меньше минимального вывода - это пополнение
+        # Если сумма больше баланса - это пополнение
+        # Иначе - предлагаем выбрать действие
+        if amount < MIN_WITHDRAWAL or amount > balance:
+            await process_deposit(message)
+        else:
+            # Спрашиваем, хочет ли пользователь вывести или пополнить
+            buttons = [
+                [
+                    InlineKeyboardButton(text="💰 Пополнить", callback_data=f"confirm_deposit_{amount}"),
+                    InlineKeyboardButton(text="💸 Вывести", callback_data=f"confirm_withdraw_{amount}")
+                ],
+                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")]
+            ]
+            
+            await message.answer(
+                f"Сумма: <b>{amount} USDT</b>\n\n"
+                f"Вы хотите пополнить или вывести?",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+            )
+    except ValueError:
+        await message.answer("❌ Введите число")
+
+# Подтверждение пополнения
+@router.callback_query(F.data.startswith("confirm_deposit_"))
+async def confirm_deposit(callback: CallbackQuery):
+    amount = float(callback.data.replace("confirm_deposit_", ""))
+    await callback.message.delete()
+    
+    # Создаем объект сообщения для обработчика
+    class FakeMessage:
+        def __init__(self, text, from_user, chat, answer):
+            self.text = text
+            self.from_user = from_user
+            self.chat = chat
+            self.answer = answer
+    
+    fake_msg = FakeMessage(
+        text=str(amount),
+        from_user=callback.from_user,
+        chat=callback.message.chat,
+        answer=callback.message.answer
+    )
+    
+    await process_deposit(fake_msg)
+    await callback.answer()
+
+# Подтверждение вывода
+@router.callback_query(F.data.startswith("confirm_withdraw_"))
+async def confirm_withdraw(callback: CallbackQuery):
+    amount = float(callback.data.replace("confirm_withdraw_", ""))
+    
+    # Проверяем задержку еще раз
+    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
+    if not can_withdraw:
+        minutes = wait_time // 60
+        seconds = wait_time % 60
+        await callback.answer(f"⏳ Подождите {minutes} мин {seconds} сек", show_alert=True)
+        return
+    
+    await callback.message.delete()
+    
+    # Создаем объект сообщения для обработчика
+    class FakeMessage:
+        def __init__(self, text, from_user, chat, answer):
+            self.text = text
+            self.from_user = from_user
+            self.chat = chat
+            self.answer = answer
+    
+    fake_msg = FakeMessage(
+        text=str(amount),
+        from_user=callback.from_user,
+        chat=callback.message.chat,
+        answer=callback.message.answer
+    )
+    
+    await process_withdraw(fake_msg)
     await callback.answer()
 
 # Партнёры
