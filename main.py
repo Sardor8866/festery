@@ -30,34 +30,43 @@ EMOJI_ABOUT = "5199885118214255386"
 # Роутер
 router = Router()
 
-# Клавиатура с inline-кнопками (с кастомными эмодзи через icon_custom_emoji_id)
+# Клавиатура с inline-кнопками (расположение: 2+2+1)
 def get_main_menu():
     buttons = [
-        [InlineKeyboardButton(
-            text="Профиль",
-            callback_data="profile",
-            icon_custom_emoji_id=EMOJI_PROFILE
-        )],
-        [InlineKeyboardButton(
-            text="Партнёры", 
-            callback_data="partners",
-            icon_custom_emoji_id=EMOJI_PARTNERS
-        )],
-        [InlineKeyboardButton(
-            text="Игры",
-            callback_data="games",
-            icon_custom_emoji_id=EMOJI_GAMES
-        )],
-        [InlineKeyboardButton(
-            text="Лидеры",
-            callback_data="leaders",
-            icon_custom_emoji_id=EMOJI_LEADERS
-        )],
-        [InlineKeyboardButton(
-            text="О проекте",
-            callback_data="about",
-            icon_custom_emoji_id=EMOJI_ABOUT
-        )],
+        # Первый ряд: 2 кнопки
+        [
+            InlineKeyboardButton(
+                text="Профиль",
+                callback_data="profile",
+                icon_custom_emoji_id=EMOJI_PROFILE
+            ),
+            InlineKeyboardButton(
+                text="Партнёры", 
+                callback_data="partners",
+                icon_custom_emoji_id=EMOJI_PARTNERS
+            )
+        ],
+        # Второй ряд: 2 кнопки
+        [
+            InlineKeyboardButton(
+                text="Игры",
+                callback_data="games",
+                icon_custom_emoji_id=EMOJI_GAMES
+            ),
+            InlineKeyboardButton(
+                text="Лидеры",
+                callback_data="leaders",
+                icon_custom_emoji_id=EMOJI_LEADERS
+            )
+        ],
+        # Третий ряд: 1 кнопка (растянутая на всю ширину)
+        [
+            InlineKeyboardButton(
+                text="О проекте",
+                callback_data="about",
+                icon_custom_emoji_id=EMOJI_ABOUT
+            )
+        ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
