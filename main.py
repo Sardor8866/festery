@@ -28,10 +28,11 @@ EMOJI_GAMES = "5424972470023104089"
 EMOJI_LEADERS = "5440539497383087970"
 EMOJI_ABOUT = "5251203410396458957"
 EMOJI_CRYPTOBOT = "5427054176246991778"
-EMOJI_BACK = "5195033767969839232"
+EMOJI_BACK = "5906771962734057347"
 EMOJI_DEVELOPMENT = "5445355530111437729"
-EMOJI_WALLET = "5907025791006283345"
+EMOJI_WALLET = "5443127283898405358"
 EMOJI_STATS = "5197288647275071607"
+EMOJI_WITHDrAWAL = "5445355530111437729"
 
 # File ID для приветственного стикера
 WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
@@ -84,19 +85,19 @@ def get_profile_menu():
     buttons = [
         [
             InlineKeyboardButton(
-                text="💰 Пополнить",
+                text="Пополнить",
                 callback_data="deposit",
                 icon_custom_emoji_id=EMOJI_WALLET
             ),
             InlineKeyboardButton(
-                text="💸 Вывести",
+                text="Вывести",
                 callback_data="withdraw",
-                icon_custom_emoji_id=EMOJI_CRYPTOBOT
+                icon_custom_emoji_id=EMOJI_WITHDrAWAL
             )
         ],
         [
             InlineKeyboardButton(
-                text="◀️ На главную",
+                text="На главную",
                 callback_data="back_to_main",
                 icon_custom_emoji_id=EMOJI_BACK
             )
@@ -109,7 +110,7 @@ def get_back_menu():
     buttons = [
         [
             InlineKeyboardButton(
-                text="◀️ На главную",
+                text="На главную",
                 callback_data="back_to_main",
                 icon_custom_emoji_id=EMOJI_BACK
             )
@@ -150,15 +151,13 @@ def get_profile_text(user_first_name, days_in_project):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="{EMOJI_WALLET}">💰</tg-emoji> Баланс: <code>{balance:,.2f}</code></b>
+<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji>: <code>{balance:,.2f}</code></b>
+<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
+<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
+<tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
 </blockquote>
 
-<blockquote>
-<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
-<tg-emoji emoji-id="{EMOJI_CRYPTOBOT}">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
-</blockquote>
-
-<tg-emoji emoji-id="{EMOJI_STATS}">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
+<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
 # Старт - отправляем стикер и меню
@@ -174,6 +173,7 @@ async def cmd_start(message: Message):
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu(),
+            disable_web_page_preview=True
         )
     except Exception as e:
         logging.error(f"Ошибка при отправке: {e}")
@@ -182,6 +182,7 @@ async def cmd_start(message: Message):
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu(),
+            disable_web_page_preview=True
         )
 
 # Профиль
@@ -195,6 +196,7 @@ async def profile_callback(callback: CallbackQuery):
         get_profile_text(callback.from_user.first_name, days_in_project),
         parse_mode=ParseMode.HTML,
         reply_markup=get_profile_menu()
+        disable_web_page_preview=True
     )
     await callback.answer()
 
