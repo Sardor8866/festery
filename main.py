@@ -89,11 +89,11 @@ def get_back_menu():
 # Текст главного меню
 def get_main_menu_text():
     return f"""
-<b>Честные игры — прозрачные правила и реальные шансы на победу.</b>
-<b>Без скрытых условий, всё открыто и по-настоящему честно.</b>
+<blockquote><tg-emoji emoji-id="5197288647275071607">🎰</tg-emoji> <b>Честные игры — прозрачные правила и реальные шансы на победу.</b>
+<b>Без скрытых условий, всё открыто и по-настоящему честно.</b></blockquote>
 
-<tg-emoji emoji-id="5195033767969839232">⚡</tg-emoji> <b>Быстрые выплаты — моментальный вывод средств без задержек.</b>
-<tg-emoji emoji-id="5445355530111437729">💎</tg-emoji> <b>Выводы через <tg-emoji emoji-id="{EMOJI_CRYPTOBOT}">🔵</tg-emoji> <a href="https://t.me/send">Cryptobot</a></b>
+<blockquote><tg-emoji emoji-id="5195033767969839232">⚡</tg-emoji> <b>Быстрые выплаты — моментальный вывод средств без задержек.</b>
+<tg-emoji emoji-id="5445355530111437729">💎</tg-emoji> <b>Выводы через <tg-emoji emoji-id="{EMOJI_CRYPTOBOT}">🔵</tg-emoji> <a href="https://t.me/send">Cryptobot</a></b></blockquote>
 
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
@@ -106,14 +106,11 @@ async def cmd_start(message: Message):
         await message.answer_sticker(
             sticker=WELCOME_STICKER_ID
         )
-        # Небольшая пауза между сообщениями
-        await asyncio.sleep(0.5)
-        # Отправляем текстовое меню
+        # Отправляем текстовое меню (без задержки)
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu(),
-            disable_web_page_preview=True
         )
     except Exception as e:
         logging.error(f"Ошибка при отправке: {e}")
@@ -122,7 +119,6 @@ async def cmd_start(message: Message):
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
             reply_markup=get_main_menu(),
-            disable_web_page_preview=True
         )
 
 # Обработчики кнопок разделов - обновляем существующее сообщение
