@@ -30,7 +30,7 @@ EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_BACK = "5906771962734057347"
 EMOJI_SUCCESS = "5199436362280976367"
 EMOJI_ERROR = "5197923386472879129"
-
+EMOJI_LINK = "5271604874419647061"
 payment_router = Router()
 bot: Bot = None  # Установится через setup_payments
 
@@ -279,15 +279,15 @@ async def deposit_amount(message: Message):
         # Отправляем сообщение с кнопкой оплаты
         sent_msg = await message.answer(
             f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji>Счет Создан!</b>\n\n"
-            f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>: <b><code>{amount}</code></b>\n"
-            f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji>Действует-<b>5 минут</b>\n\n"
-            f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату.",
+            f"<blockquote><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: <b><code>{amount}</code></b>\n"
+            f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji>Действует-<b>5 минут</b></blockquote>\n\n"
+            f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату!",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="Оплатить", 
                     url=invoice['pay_url'],
-                    icon_custom_emoji_id=EMOJI_WALLET  
+                    icon_custom_emoji_id=EMOJI_LINK  
                 )],
                 [InlineKeyboardButton(
                     text="Отмена", 
