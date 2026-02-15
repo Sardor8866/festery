@@ -89,9 +89,9 @@ def get_main_menu_text():
 <b>Без скрытых условий, всё открыто и по-настоящему честно.</b>
 
 <tg-emoji emoji-id="5195033767969839232">⚡</tg-emoji> <b>Быстрые выплаты — моментальный вывод средств без задержек.</b>
-<b>Выводы через <a href="https://t.me/CryptoBot"><tg-emoji emoji-id="5197288647275071607">🔵</tg-emoji> Cryptobot</a></b>
+<tg-emoji emoji-id="5445355530111437729">💎</tg-emoji> <b>Выводы через-<a href="@CryptoBot"><tg-emoji emoji-id="5427054176246991778">🔵</tg-emoji> Cryptobot</a></b>
 
-<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/support">Тех. поддержка</a> | <a href="https://t.me/chat">Наш чат</a> | <a href="https://t.me/news">Новости</a></b>
+<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
 # Старт
