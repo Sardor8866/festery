@@ -28,7 +28,6 @@ EMOJI_LEADERS = "5440539497383087970"
 EMOJI_ABOUT = "5251203410396458957"
 EMOJI_CRYPTOBOT = "5427054176246991778"  # ID для синего кружка перед Cryptobot
 
-PHOTO_URL = "https://i.postimg.cc/J7BK1X6H/Chat-GPT-Image-15-fevr-2026-g-09-22-45.png"  
 # Роутер
 router = Router()
 
@@ -87,7 +86,7 @@ def get_back_menu():
 # Текст главного меню
 def get_main_menu_text():
     return f"""
-<tg-emoji emoji-id="5197288647275071607">🎰</tg-emoji> <b>Честные игры — прозрачные правила и реальные шансы на победу.</b>
+<b>Честные игры — прозрачные правила и реальные шансы на победу.</b>
 <b>Без скрытых условий, всё открыто и по-настоящему честно.</b>
 
 <tg-emoji emoji-id="5195033767969839232">⚡</tg-emoji> <b>Быстрые выплаты — моментальный вывод средств без задержек.</b>
@@ -96,19 +95,24 @@ def get_main_menu_text():
 <tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
-# Старт - отправляем фото с меню
+# Старт - отправляем приветственный эмодзи как стикер и текстовое меню
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
-        await message.answer_photo(
-            photo=PHOTO_URL,
-            caption=get_main_menu_text(),
+        # Сначала отправляем кастомный эмодзи как стикер
+        await message.answer_sticker(
+            sticker=EMOJI_WELCOME  # ID кастомного эмодзи
+        )
+        # Затем отправляем текстовое меню
+        await message.answer(
+            get_main_menu_text(),
             parse_mode=ParseMode.HTML,
-            reply_markup=get_main_menu()
+            reply_markup=get_main_menu(),
+            disable_web_page_preview=True
         )
     except Exception as e:
-        logging.error(f"Ошибка при отправке фото: {e}")
-        # Если фото не отправилось, отправляем только текст
+        logging.error(f"Ошибка при отправке стикера: {e}")
+        # Если стикер не отправился, отправляем только текст
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
@@ -116,13 +120,10 @@ async def cmd_start(message: Message):
             disable_web_page_preview=True
         )
 
-# Обработчики кнопок разделов - для сообщений с фото используем delete + answer
+# Обработчики кнопок разделов - обновляем существующее сообщение
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery):
-    # Удаляем сообщение с фото
-    await callback.message.delete()
-    # Отправляем новое текстовое сообщение
-    await callback.message.answer(
+    await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Раздел профиля</b>\n\n'
         f'Здесь будет отображаться информация о вашем профиле, статистика и настройки.',
         parse_mode=ParseMode.HTML,
@@ -132,8 +133,7 @@ async def profile_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "partners")
 async def partners_callback(callback: CallbackQuery):
-    await callback.message.delete()
-    await callback.message.answer(
+    await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
         f'Список партнёров и информация о партнёрской программе появится здесь.',
         parse_mode=ParseMode.HTML,
@@ -143,8 +143,7 @@ async def partners_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "games")
 async def games_callback(callback: CallbackQuery):
-    await callback.message.delete()
-    await callback.message.answer(
+    await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Список игр</b>\n\n'
         f'Здесь будут отображаться все доступные игры с высокими коэффициентами.',
         parse_mode=ParseMode.HTML,
@@ -154,8 +153,7 @@ async def games_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback: CallbackQuery):
-    await callback.message.delete()
-    await callback.message.answer(
+    await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
         f'Лучшие игроки недели и их достижения будут отображаться здесь.',
         parse_mode=ParseMode.HTML,
@@ -165,8 +163,7 @@ async def leaders_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "about")
 async def about_callback(callback: CallbackQuery):
-    await callback.message.delete()
-    await callback.message.answer(
+    await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> <b>О проекте</b>\n\n'
         f'Мы — команда профессионалов, создающая честный гемблинг с 2020 года.\n\n'
         f'• Мгновенные выплаты\n'
@@ -178,25 +175,14 @@ async def about_callback(callback: CallbackQuery):
     )
     await callback.answer()
 
-# Обработчик кнопки "На главную" - возвращаем фото
+# Обработчик кнопки "На главную" - возвращаем главное меню
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main_callback(callback: CallbackQuery):
-    await callback.message.delete()  # Удаляем текущее текстовое сообщение
-    try:
-        await callback.message.answer_photo(
-            photo=PHOTO_URL,
-            caption=get_main_menu_text(),
-            parse_mode=ParseMode.HTML,
-            reply_markup=get_main_menu()
-        )
-    except Exception as e:
-        logging.error(f"Ошибка при отправке фото: {e}")
-        await callback.message.answer(
-            get_main_menu_text(),
-            parse_mode=ParseMode.HTML,
-            reply_markup=get_main_menu(),
-            disable_web_page_preview=True
-        )
+    await callback.message.edit_text(
+        get_main_menu_text(),
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_main_menu()
+    )
     await callback.answer()
 
 # Основная функция
