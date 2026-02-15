@@ -172,8 +172,7 @@ async def cmd_start(message: Message):
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
-            reply_markup=get_main_menu(),
-            disable_web_page_preview=True
+            reply_markup=get_main_menu()
         )
     except Exception as e:
         logging.error(f"Ошибка при отправке: {e}")
@@ -181,8 +180,7 @@ async def cmd_start(message: Message):
         await message.answer(
             get_main_menu_text(),
             parse_mode=ParseMode.HTML,
-            reply_markup=get_main_menu(),
-            disable_web_page_preview=True
+            reply_markup=get_main_menu()
         )
 
 # Профиль
