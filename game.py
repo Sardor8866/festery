@@ -928,7 +928,7 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
     
     # При ничьей - переброс
     if player_value == bot_value:
-        await player_roll.reply("🔄 Ничья! Переброс...")
+        await player_roll.reply("<tg-emoji emoji-id=\"5402186569006210455\">🎉</tg-emoji>Ничья! Переброс...")
         await asyncio.sleep(1)
         
         player_roll = await betting_game.bot.send_dice(chat_id, emoji="🎳")
