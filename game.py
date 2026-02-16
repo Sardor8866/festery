@@ -897,7 +897,7 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
         
         await dice2.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
-            f"<blockquote><code>{winnings:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎉</tg-emoji> Успешно зачислены на баланс!</blockquote>",,
+            f"<blockquote><code>{winnings:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎉</tg-emoji> Успешно зачислены на баланс!</blockquote>",
             parse_mode='HTML'
         )
     else:
