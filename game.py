@@ -475,15 +475,17 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             nickname += f" {message.from_user.last_name}"
         nickname = nickname.strip() or message.from_user.username or "Игрок"
         
-        # Удаляем сообщение с суммой
+        # Удаляем сообщение с запросом суммы (предыдущее сообщение от бота)
         try:
-            await message.delete()
+            # Пытаемся найти и удалить предыдущее сообщение бота
+            async for msg in betting_game.bot.get_chat_history(message.chat.id, limit=2):
+                if msg.from_user and msg.from_user.id == betting_game.bot.id:
+                    await msg.delete()
+                    break
         except:
             pass
         
-        # СРАЗУ КИДАЕМ КУБИК - без лишнего текста!
-        
-        # Запускаем игру
+        # СРАЗУ КИДАЕМ КУБИК
         if bet_type in ['куб_2меньше', 'куб_2больше']:
             await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
         elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
@@ -520,7 +522,7 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     else:
         emoji = "🎲"
     
-    # СРАЗУ КИДАЕМ КУБИК - без лишнего текста
+    # СРАЗУ КИДАЕМ КУБИК
     dice_message = await betting_game.bot.send_dice(chat_id, emoji=emoji)
     await asyncio.sleep(3)
     
@@ -653,14 +655,21 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
         )
 
 async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Отмена ставки"""
+    """Отмена ставки - возврат в меню игр"""
     user_id = callback.from_user.id
     if user_id in betting_game.pending_bets:
         del betting_game.pending_bets[user_id]
     await state.clear()
+    
+    # Отправляем сообщение об отмене
     try:
         await callback.message.edit_text("❌ Ставка отменена")
         await asyncio.sleep(1)
         await callback.message.delete()
     except:
         pass
+    
+    # Импортируем функцию для показа меню игр из main
+    # Примечание: эта функция должна быть доступна в main.py
+    from main import games_callback
+    await games_callback(callback, state)
