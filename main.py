@@ -5,6 +5,9 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
+from aiogram.fsm.context import FSMContext  # Добавлен недостающий импорт
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
@@ -510,7 +513,7 @@ async def main():
     global betting_game
     
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
     
     # Инициализируем игру с ботом
     betting_game = BettingGame(bot)
