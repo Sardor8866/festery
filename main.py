@@ -119,7 +119,7 @@ def get_games_menu():
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'], icon_custom_emoji_id=EMOJI_BOWLING)
         ],
         [
-            InlineKeyboardButton(text="◀️ Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
+            InlineKeyboardButton(text="Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -140,7 +140,7 @@ def get_profile_menu():
 # Клавиатура для отмены
 def get_cancel_menu():
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="◀️ Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
+        InlineKeyboardButton(text="Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
     ]])
 
 # Текст главного меню
@@ -190,9 +190,9 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji> <code>{balance:,.2f}</code> USDT</b>
-<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
-<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
+<b><tg-emoji emoji-id="5278467510604160626">💰</tg-emoji> <code>{balance:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
+<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
+<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
 <tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
 </blockquote>
 
@@ -310,7 +310,7 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<blockquote><i>Введите сумму пополнения (мин. {MIN_DEPOSIT} USDT):</i></blockquote>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму пополнения:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -341,7 +341,7 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<blockquote><i>Введите сумму вывода (мин. {MIN_WITHDRAWAL} USDT):</i></blockquote>"
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму вывода:</i></blockquote>"
         f"Доступно: <code>{balance:.2f} USDT</code>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
