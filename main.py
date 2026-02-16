@@ -16,7 +16,11 @@ from payments import deposit_amount as process_deposit
 from payments import withdraw_amount as process_withdraw
 
 # Импортируем игровой модуль
-from game import BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, cancel_bet
+from game import (
+    BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, 
+    show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, 
+    cancel_bet, is_bet_command, handle_text_bet_command
+)
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -347,8 +351,25 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+# Обработка текстовых сообщений (команды ставок и ввод суммы)
+@router.message(F.text)
+async def handle_text_message(message: Message, state: FSMContext):
+    """Обработка текстовых сообщений - команды ставок или ввод суммы"""
+    
+    # Проверяем, является ли это командой ставки
+    if is_bet_command(message.text):
+        await handle_text_bet_command(message, betting_game)
+        return
+    
+    # Иначе проверяем, является ли это числом (сумма ставки или депозит/вывод)
+    try:
+        amount = float(message.text)
+        await handle_amount_input(message, state)
+    except ValueError:
+        # Неизвестная команда - игнорируем или отвечаем
+        pass
+
 # Обработка ввода суммы
-@router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message, state: FSMContext):
     """Обрабатывает ввод суммы"""
     user_id = message.from_user.id
