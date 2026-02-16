@@ -112,15 +112,15 @@ def get_main_menu():
 def get_games_menu():
     buttons = [
         [
-            InlineKeyboardButton(text="Кубик", callback_data=GAME_CALLBACKS['dice'], icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="Баскетбол", callback_data=GAME_CALLBACKS['basketball'], icon_custom_emoji_id=EMOJI_BASKETBALL)
+            InlineKeyboardButton(text="🎲Кубик", callback_data=GAME_CALLBACKS['dice'],
+            InlineKeyboardButton(text="🏀Баскетбол", callback_data=GAME_CALLBACKS['basketball'],
         ],
         [
-            InlineKeyboardButton(text="Футбол", callback_data=GAME_CALLBACKS['football'], icon_custom_emoji_id=EMOJI_FOOTBALL),
-            InlineKeyboardButton(text="Дартс", callback_data=GAME_CALLBACKS['darts'], icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="⚽️Футбол", callback_data=GAME_CALLBACKS['football'],
+            InlineKeyboardButton(text="🎯Дартс", callback_data=GAME_CALLBACKS['darts'],
         ],
         [
-            InlineKeyboardButton(text="Боулинг", callback_data=GAME_CALLBACKS['bowling'], icon_custom_emoji_id=EMOJI_BOWLING)
+            InlineKeyboardButton(text="🎳Боулинг", callback_data=GAME_CALLBACKS['bowling'],
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
@@ -165,12 +165,12 @@ def get_games_menu_text(user_id: int):
     return f"""
 <blockquote><tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Игры</b></blockquote>
 
-<blockquote>
-💰 Баланс: <code>{balance:.2f} USDT</code>
-🎲 Мин. ставка: <code>0.1 USDT</code>
-</blockquote>
 
-<b>Выберите игру:</b>
+<blockquote><tg-emoji emoji-id="5278467510604160626">🎮</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id="5197434882321567830">🎮</tg-emoji></blockquote>
+
+<blockquote><b>Выберите игру:</b></blockquote>
+
+<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
 # Профиль с реальным балансом из storage
