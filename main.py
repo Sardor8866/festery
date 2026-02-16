@@ -161,50 +161,95 @@ def get_games_menu_text(user_id: int):
     return f"""
 <blockquote><tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Игры</b></blockquote>
 
-<b>Баланс:</b> <code>{balance:.2f} USDT</code>
+<blockquote>
+💰 Баланс: <code>{balance:.2f} USDT</code>
+🎲 Мин. ставка: <code>0.1 USDT</code>
+</blockquote>
 
-<i>Выберите игру:</i>
+<b>Выберите игру:</b>
 """
 
-# Команда /start
-@router.message(CommandStart())
-async def start_command(message: Message, state: FSMContext):
-    await state.clear()
-    if message.from_user.id in user_state:
-        del user_state[message.from_user.id]
+# Профиль с реальным балансом из storage
+def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
+    balance = sync_balances(user_id)
+    user_data = storage.get_user(user_id)
+    total_deposits = user_data.get('total_deposits', 0)
+    total_withdrawals = user_data.get('total_withdrawals', 0)
     
-    await message.answer_sticker(WELCOME_STICKER_ID)
-    await message.answer(get_main_menu_text(), parse_mode=ParseMode.HTML, reply_markup=get_main_menu())
+    # Склонение слова "день"
+    if 11 <= days_in_project <= 19:
+        days_text = "дней"
+    elif days_in_project % 10 == 1:
+        days_text = "день"
+    elif days_in_project % 10 in [2, 3, 4]:
+        days_text = "дня"
+    else:
+        days_text = "дней"
+    
+    return f"""
+<blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
+
+<blockquote>
+<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji> <code>{balance:,.2f}</code> USDT</b>
+<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
+<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
+<tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
+</blockquote>
+
+<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
+"""
+
+# Старт
+@router.message(CommandStart())
+async def cmd_start(message: Message):
+    try:
+        # Регистрируем пользователя в платежной системе
+        storage.get_user(message.from_user.id)
+        # Синхронизируем баланс
+        sync_balances(message.from_user.id)
+        
+        await message.answer_sticker(sticker=WELCOME_STICKER_ID)
+        await message.answer(
+            get_main_menu_text(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_main_menu()
+        )
+    except Exception as e:
+        logging.error(f"Error in start: {e}")
+        await message.answer("Произошла ошибка. Попробуйте позже.")
 
 # Профиль
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+    days_in_project = 30
+    
+    # Очищаем состояние пользователя
     if callback.from_user.id in user_state:
         del user_state[callback.from_user.id]
+    await state.clear()
     
-    balance = sync_balances(callback.from_user.id)
-    user_info = callback.from_user
-    username = f"@{user_info.username}" if user_info.username else "Не указан"
-    full_name = f"{user_info.first_name or ''} {user_info.last_name or ''}".strip()
+    # Синхронизируем баланс перед показом
+    sync_balances(callback.from_user.id)
     
     await callback.message.edit_text(
-        f'<blockquote><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Профиль</b></blockquote>\n\n'
-        f'<b>ID:</b> <code>{user_info.id}</code>\n'
-        f'<b>Имя:</b> {full_name}\n'
-        f'<b>Username:</b> {username}\n\n'
-        f'<b><tg-emoji emoji-id="{EMOJI_WALLET}">💰</tg-emoji> Баланс:</b> <code>{balance:.2f} USDT</code>',
+        get_profile_text(
+            callback.from_user.first_name, 
+            days_in_project,
+            callback.from_user.id
+        ),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_profile_menu()
+        reply_markup=get_profile_menu(),
+        disable_web_page_preview=True
     )
     await callback.answer()
 
 # Игры
 @router.callback_query(F.data == "games")
 async def games_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+    # Очищаем состояние
     if callback.from_user.id in user_state:
         del user_state[callback.from_user.id]
+    await state.clear()
     
     await callback.message.edit_text(
         get_games_menu_text(callback.from_user.id),
