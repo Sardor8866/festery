@@ -112,15 +112,15 @@ def get_main_menu():
 def get_games_menu():
     buttons = [
         [
-            InlineKeyboardButton(text="🎲 Кубик", callback_data=GAME_CALLBACKS['dice'], icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="🏀 Баскетбол", callback_data=GAME_CALLBACKS['basketball'], icon_custom_emoji_id=EMOJI_BASKETBALL)
+            InlineKeyboardButton(text="Кубик", callback_data=GAME_CALLBACKS['dice'], icon_custom_emoji_id=EMOJI_DICE),
+            InlineKeyboardButton(text="Баскетбол", callback_data=GAME_CALLBACKS['basketball'], icon_custom_emoji_id=EMOJI_BASKETBALL)
         ],
         [
-            InlineKeyboardButton(text="⚽ Футбол", callback_data=GAME_CALLBACKS['football'], icon_custom_emoji_id=EMOJI_FOOTBALL),
-            InlineKeyboardButton(text="🎯 Дартс", callback_data=GAME_CALLBACKS['darts'], icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="Футбол", callback_data=GAME_CALLBACKS['football'], icon_custom_emoji_id=EMOJI_FOOTBALL),
+            InlineKeyboardButton(text="Дартс", callback_data=GAME_CALLBACKS['darts'], icon_custom_emoji_id=EMOJI_DARTS)
         ],
         [
-            InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'], icon_custom_emoji_id=EMOJI_BOWLING)
+            InlineKeyboardButton(text="Боулинг", callback_data=GAME_CALLBACKS['bowling'], icon_custom_emoji_id=EMOJI_BOWLING)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
