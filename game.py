@@ -147,7 +147,6 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=Non
         )
     except Exception as e:
         logging.error(f"Error editing message: {e}")
-        # Если не получается отредактировать, отправляем новое сообщение
         try:
             await callback.message.answer(
                 text,
@@ -651,19 +650,12 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
         )
 
 async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Отмена ставки - возврат в меню игр"""
+    """Отмена ставки - сразу возврат в меню игр"""
     user_id = callback.from_user.id
     if user_id in betting_game.pending_bets:
         del betting_game.pending_bets[user_id]
     await state.clear()
     
-    # Показываем сообщение об отмене
-    await callback.message.edit_text(
-        "❌ Ставка отменена. Возврат в меню игр...",
-        reply_markup=None
-    )
-    await asyncio.sleep(1)
-    
-    # Импортируем функцию для показа меню игр
+    # Сразу переходим в меню игр без лишнего текста
     from main import games_callback
     await games_callback(callback, state)
