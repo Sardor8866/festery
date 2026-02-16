@@ -190,7 +190,7 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="5278467510604160626">💰</tg-emoji> <code>{balance:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
+<b><tg-emoji emoji-id="5278467510604160626">💰</tg-emoji>:<code>{balance:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
 <tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
 <tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
 <tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
@@ -342,7 +342,6 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
         f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму вывода:</i></blockquote>"
-        f"Доступно: <code>{balance:.2f} USDT</code>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
