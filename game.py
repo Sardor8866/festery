@@ -6,12 +6,20 @@ from aiogram.fsm.state import State, StatesGroup
 import json
 import os
 import logging
+import re
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Tuple
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 # Конфигурация
 MIN_BET = 0.1
+MAX_BET = 10000.0
+
+# Защита от дублирования ставок
+RATE_LIMIT_SECONDS = 3  # Минимальное время между ставками
+user_last_bet_time: Dict[int, datetime] = {}
 
 # ID кастомных эмодзи
 EMOJI_DICE = "5424972470023104089"
@@ -70,6 +78,104 @@ BOWLING_BET_TYPES = {
     'боулинг_страйк': {'name': '🎳 Страйк', 'values': [6], 'multiplier': 3.75},
 }
 
+# Маппинг команд для текстового ввода
+COMMAND_MAPPING = {
+    # Футбол (русский)
+    'фут': 'футбол',
+    'fut': 'футбол',
+    'foot': 'футбол',
+    'футбол': 'футбол',
+    'football': 'футбол',
+    
+    # Баскетбол (русский)
+    'баскет': 'баскет',
+    'basket': 'баскет',
+    'basketball': 'баскет',
+    'баскетбол': 'баскет',
+    'bask': 'баскет',
+    
+    # Кубик (русский)
+    'куб': 'куб',
+    'dice': 'куб',
+    'кубик': 'куб',
+    'cube': 'куб',
+    
+    # Дартс (русский)
+    'дартс': 'дартс',
+    'dart': 'дартс',
+    'darts': 'дартс',
+    'дарт': 'дартс',
+    
+    # Боулинг (русский)
+    'боулинг': 'боулинг',
+    'bowling': 'боулинг',
+    'боул': 'боулинг',
+    'bowl': 'боулинг',
+}
+
+# Маппинг типов ставок
+BET_TYPE_MAPPING = {
+    # Футбол
+    'гол': 'футбол_гол',
+    'goal': 'футбол_гол',
+    'мимо': 'футбол_мимо',
+    'miss': 'футбол_мимо',
+    
+    # Баскетбол
+    '3очка': 'баскет_3очка',
+    '3points': 'баскет_3очка',
+    '3': 'баскет_3очка',
+    'три': 'баскет_3очка',
+    'three': 'баскет_3очка',
+    
+    # Кубик
+    'нечет': 'куб_нечет',
+    'odd': 'куб_нечет',
+    'нечетное': 'куб_нечет',
+    'чет': 'куб_чет',
+    'even': 'куб_чет',
+    'четное': 'куб_чет',
+    'мал': 'куб_мал',
+    'small': 'куб_мал',
+    'меньше': 'куб_мал',
+    'less': 'куб_мал',
+    'бол': 'куб_бол',
+    'big': 'куб_бол',
+    'больше': 'куб_бол',
+    'more': 'куб_бол',
+    '2меньше': 'куб_2меньше',
+    '2less': 'куб_2меньше',
+    '2больше': 'куб_2больше',
+    '2more': 'куб_2больше',
+    '1': 'куб_1',
+    '2': 'куб_2',
+    '3': 'куб_3',
+    '4': 'куб_4',
+    '5': 'куб_5',
+    '6': 'куб_6',
+    
+    # Дартс
+    'белое': 'дартс_белое',
+    'white': 'дартс_белое',
+    'белый': 'дартс_белое',
+    'красное': 'дартс_красное',
+    'red': 'дартс_красное',
+    'красный': 'дартс_красное',
+    'центр': 'дартс_центр',
+    'center': 'дартс_центр',
+    'bull': 'дартс_центр',
+    
+    # Боулинг
+    'победа': 'боулинг_победа',
+    'win': 'боулинг_победа',
+    'victory': 'боулинг_победа',
+    'поражение': 'боулинг_поражение',
+    'lose': 'боулинг_поражение',
+    'loss': 'боулинг_поражение',
+    'страйк': 'боулинг_страйк',
+    'strike': 'боулинг_страйк',
+}
+
 # Состояния FSM
 class BetStates(StatesGroup):
     waiting_for_amount = State()
@@ -79,6 +185,7 @@ class BettingGame:
         self.bot = bot
         self.user_balances = {}
         self.pending_bets = {}
+        self.active_games = {}  # Защита от одновременных игр
         self.referral_system = None
         self.load_balances()
 
@@ -136,6 +243,107 @@ class BettingGame:
 
     def set_referral_system(self, referral_system):
         self.referral_system = referral_system
+    
+    def is_user_in_game(self, user_id: int) -> bool:
+        """Проверка, играет ли пользователь в данный момент"""
+        return user_id in self.active_games
+    
+    def start_game(self, user_id: int):
+        """Отметить начало игры для пользователя"""
+        self.active_games[user_id] = datetime.now()
+    
+    def end_game(self, user_id: int):
+        """Отметить конец игры для пользователя"""
+        if user_id in self.active_games:
+            del self.active_games[user_id]
+
+def check_rate_limit(user_id: int) -> Tuple[bool, float]:
+    """
+    Проверка rate limit для пользователя
+    Возвращает (разрешено, оставшееся_время)
+    """
+    now = datetime.now()
+    
+    if user_id in user_last_bet_time:
+        time_passed = (now - user_last_bet_time[user_id]).total_seconds()
+        if time_passed < RATE_LIMIT_SECONDS:
+            return False, RATE_LIMIT_SECONDS - time_passed
+    
+    user_last_bet_time[user_id] = now
+    return True, 0.0
+
+def parse_bet_command(text: str) -> Optional[Tuple[str, float]]:
+    """
+    Парсинг команды ставки из текста
+    Возвращает (bet_type, amount) или None
+    
+    Примеры:
+    - "фут гол 5" -> ('футбол_гол', 5.0)
+    - "/foot goal 10" -> ('футбол_гол', 10.0)
+    - "куб нечет 50" -> ('куб_нечет', 50.0)
+    """
+    # Удаляем слэш в начале если есть
+    text = text.strip()
+    if text.startswith('/'):
+        text = text[1:]
+    
+    # Приводим к нижнему регистру
+    text = text.lower()
+    
+    # Разделяем на части
+    parts = text.split()
+    
+    if len(parts) < 3:
+        return None
+    
+    # Первая часть - игра
+    game = parts[0]
+    # Вторая часть - тип ставки
+    bet_type_key = parts[1]
+    # Третья часть - сумма
+    try:
+        amount = float(parts[2])
+    except (ValueError, IndexError):
+        return None
+    
+    # Проверяем минимум и максимум
+    if amount < MIN_BET or amount > MAX_BET:
+        return None
+    
+    # Находим игру
+    game_prefix = COMMAND_MAPPING.get(game)
+    if not game_prefix:
+        return None
+    
+    # Для баскетбола гол и мимо тоже работают
+    if game_prefix == 'баскет':
+        if bet_type_key in ['гол', 'goal']:
+            bet_type_key = 'гол'
+        elif bet_type_key in ['мимо', 'miss']:
+            bet_type_key = 'мимо'
+        
+        # Формируем полный тип ставки
+        if bet_type_key == 'гол':
+            full_bet_type = 'баскет_гол'
+        elif bet_type_key == 'мимо':
+            full_bet_type = 'баскет_мимо'
+        else:
+            full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
+    elif game_prefix == 'футбол':
+        # Для футбола только гол и мимо
+        full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
+    else:
+        # Для остальных игр
+        full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
+    
+    if not full_bet_type:
+        return None
+    
+    # Проверяем, что тип ставки соответствует игре
+    if not full_bet_type.startswith(game_prefix):
+        return None
+    
+    return (full_bet_type, amount)
 
 async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=None, parse_mode=None):
     """Безопасное редактирование сообщения с обработкой ошибок"""
@@ -173,7 +381,11 @@ async def show_dice_menu(callback: CallbackQuery):
     
     await safe_edit_message(callback, 
         f"<b>🎲 Кубик</b>\n\n"
-        f"<i>Выберите тип ставки:</i>",
+        f"<i>Выберите тип ставки:</i>\n\n"
+        f"<blockquote>💡 Команды:\n"
+        f"<code>куб нечет 10</code>\n"
+        f"<code>куб чет 20</code>\n"
+        f"<code>куб 1 50</code> (точное число)</blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -206,15 +418,13 @@ async def show_exact_number_menu(callback: CallbackQuery):
     await callback.answer()
 
 async def show_basketball_menu(callback: CallbackQuery):
-    """Показать меню баскетбола"""
+    """Показать меню баскетбола - НОВОЕ РАСПОЛОЖЕНИЕ"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🏀 Гол 2 очка (x1.85)", callback_data="bet_basketball_баскет_гол", icon_custom_emoji_id=EMOJI_BASKETBALL)
-        ],
         [
             InlineKeyboardButton(text="🏀 3-очковый (x2.75)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_BASKETBALL)
         ],
         [
+            InlineKeyboardButton(text="🏀 Гол 2 очка (x1.85)", callback_data="bet_basketball_баскет_гол", icon_custom_emoji_id=EMOJI_BASKETBALL),
             InlineKeyboardButton(text="🏀 Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо", icon_custom_emoji_id=EMOJI_BASKETBALL)
         ],
         [
@@ -224,19 +434,21 @@ async def show_basketball_menu(callback: CallbackQuery):
     
     await safe_edit_message(callback,
         f"<b>🏀 Баскетбол</b>\n\n"
-        f"<i>Выберите тип ставки:</i>",
+        f"<i>Выберите тип ставки:</i>\n\n"
+        f"<blockquote>💡 Команды:\n"
+        f"<code>баскет гол 10</code>\n"
+        f"<code>баскет 3очка 20</code>\n"
+        f"<code>basket miss 15</code></blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
     await callback.answer()
 
 async def show_football_menu(callback: CallbackQuery):
-    """Показать меню футбола"""
+    """Показать меню футбола - НОВОЕ РАСПОЛОЖЕНИЕ"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⚽ Гол (x1.3)", callback_data="bet_football_футбол_гол", icon_custom_emoji_id=EMOJI_FOOTBALL)
-        ],
-        [
+            InlineKeyboardButton(text="⚽ Гол (x1.3)", callback_data="bet_football_футбол_гол", icon_custom_emoji_id=EMOJI_FOOTBALL),
             InlineKeyboardButton(text="⚽ Мимо (x1.7)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_FOOTBALL)
         ],
         [
@@ -246,7 +458,11 @@ async def show_football_menu(callback: CallbackQuery):
     
     await safe_edit_message(callback,
         f"<b>⚽ Футбол</b>\n\n"
-        f"<i>Выберите тип ставки:</i>",
+        f"<i>Выберите тип ставки:</i>\n\n"
+        f"<blockquote>💡 Команды:\n"
+        f"<code>фут гол 5</code>\n"
+        f"<code>фут мимо 10</code>\n"
+        f"<code>foot goal 15</code></blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -272,7 +488,11 @@ async def show_darts_menu(callback: CallbackQuery):
     
     await safe_edit_message(callback,
         f"<b>🎯 Дартс</b>\n\n"
-        f"<i>Выберите тип ставки:</i>",
+        f"<i>Выберите тип ставки:</i>\n\n"
+        f"<blockquote>💡 Команды:\n"
+        f"<code>дартс белое 10</code>\n"
+        f"<code>дартс центр 25</code>\n"
+        f"<code>dart red 15</code></blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -295,16 +515,121 @@ async def show_bowling_menu(callback: CallbackQuery):
     
     await safe_edit_message(callback,
         f"<b>🎳 Боулинг</b>\n\n"
-        f"<i>Выберите тип ставки:</i>",
+        f"<i>Выберите тип ставки:</i>\n\n"
+        f"<blockquote>💡 Команды:\n"
+        f"<code>боулинг победа 10</code>\n"
+        f"<code>боулинг страйк 50</code>\n"
+        f"<code>bowling win 20</code></blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
     await callback.answer()
 
+async def handle_text_bet_command(message: Message, betting_game: BettingGame):
+    """
+    Обработка текстовых команд ставок
+    """
+    user_id = message.from_user.id
+    
+    # Проверка rate limit
+    allowed, wait_time = check_rate_limit(user_id)
+    if not allowed:
+        await message.answer(
+            f"⏳ Подождите {wait_time:.1f} сек перед следующей ставкой",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Проверка активной игры
+    if betting_game.is_user_in_game(user_id):
+        await message.answer("⏳ Дождитесь окончания текущей игры!")
+        return
+    
+    # Парсинг команды
+    parsed = parse_bet_command(message.text)
+    
+    if not parsed:
+        await message.answer(
+            "❌ <b>Неверный формат команды!</b>\n\n"
+            "📝 <b>Примеры:</b>\n"
+            "<code>фут гол 5</code> - футбол, гол, 5 USDT\n"
+            "<code>баскет 3очка 10</code> - баскетбол, 3-очковый\n"
+            "<code>куб нечет 20</code> - кубик, нечетное\n"
+            "<code>дартс центр 15</code> - дартс, центр\n"
+            "<code>боулинг победа 10</code> - боулинг, победа\n\n"
+            "🌐 Работают команды на русском и английском!",
+            parse_mode='HTML'
+        )
+        return
+    
+    bet_type, amount = parsed
+    
+    # Проверка баланса
+    balance = betting_game.get_balance(user_id)
+    if balance < amount:
+        await message.answer(
+            f"❌ <b>Недостаточно средств!</b>\n\n"
+            f"💰 Баланс: <code>{balance:.2f} USDT</code>\n"
+            f"💸 Нужно: <code>{amount:.2f} USDT</code>",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Получаем конфиг ставки
+    bet_config = betting_game.get_bet_config(bet_type)
+    if not bet_config:
+        await message.answer("❌ Ошибка конфигурации ставки")
+        return
+    
+    # Снимаем средства
+    if not betting_game.subtract_balance(user_id, amount):
+        await message.answer("❌ Ошибка при снятии средств")
+        return
+    
+    # Получаем никнейм
+    nickname = message.from_user.first_name or ""
+    if message.from_user.last_name:
+        nickname += f" {message.from_user.last_name}"
+    nickname = nickname.strip() or message.from_user.username or "Игрок"
+    
+    # Отмечаем начало игры
+    betting_game.start_game(user_id)
+    
+    try:
+        # Запускаем игру
+        if bet_type in ['куб_2меньше', 'куб_2больше']:
+            await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+        elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
+            await play_bowling_vs_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+        else:
+            await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+    except Exception as e:
+        logging.error(f"Ошибка в игре: {e}")
+        # Возвращаем средства
+        betting_game.add_balance(user_id, amount)
+        await message.answer("❌ Произошла ошибка. Средства возвращены.")
+    finally:
+        # Завершаем игру
+        betting_game.end_game(user_id)
+
 async def request_amount(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
     """Запросить сумму ставки"""
     bet_type = callback.data.split('_', 2)[2]
     user_id = callback.from_user.id
+    
+    # Проверка rate limit
+    allowed, wait_time = check_rate_limit(user_id)
+    if not allowed:
+        await callback.answer(
+            f"⏳ Подождите {wait_time:.1f} сек",
+            show_alert=True
+        )
+        return
+    
+    # Проверка активной игры
+    if betting_game.is_user_in_game(user_id):
+        await callback.answer("⏳ Дождитесь окончания игры!", show_alert=True)
+        return
     
     balance = betting_game.get_balance(user_id)
     
@@ -344,11 +669,20 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
         await state.clear()
         return
     
+    # Проверка активной игры
+    if betting_game.is_user_in_game(user_id):
+        await message.answer("⏳ Дождитесь окончания текущей игры!")
+        return
+    
     try:
         amount = float(message.text)
         
         if amount < MIN_BET:
             await message.answer(f"❌ Минимум: {MIN_BET} USDT")
+            return
+        
+        if amount > MAX_BET:
+            await message.answer(f"❌ Максимум: {MAX_BET} USDT")
             return
             
         balance = betting_game.get_balance(user_id)
@@ -384,6 +718,9 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             nickname += f" {message.from_user.last_name}"
         nickname = nickname.strip() or message.from_user.username or "Игрок"
         
+        # Отмечаем начало игры
+        betting_game.start_game(user_id)
+        
         # Запускаем игру
         try:
             if bet_type in ['куб_2меньше', 'куб_2больше']:
@@ -402,6 +739,8 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             if user_id in betting_game.pending_bets:
                 del betting_game.pending_bets[user_id]
             await state.clear()
+            # Завершаем игру
+            betting_game.end_game(user_id)
         
     except ValueError:
         await message.answer("❌ Введите число")
