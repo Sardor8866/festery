@@ -856,9 +856,8 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
         )
     else:
         await dice_message.reply(
-            f"<b><tg-emoji emoji-id=\"{EMOJI_LOSE}\">❌</tg-emoji> ПРОИГРЫШ</b>\n\n"
-            f"👤 {nickname}\n"
-            f"💸 -<code>{amount:.2f} USDT</code>",
+            f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
+            f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
             parse_mode='HTML'
         )
 
@@ -902,10 +901,8 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
         )
     else:
         await dice2.reply(
-            f"<b><tg-emoji emoji-id=\"{EMOJI_LOSE}\">❌</tg-emoji> ПРОИГРЫШ</b>\n\n"
-            f"👤 {nickname}\n"
-            f"🎲 {dice1_value} и {dice2_value}\n"
-            f"💸 -<code>{amount:.2f} USDT</code>",
+            f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
+            f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
             parse_mode='HTML'
         )
 
@@ -964,10 +961,8 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
         )
     else:
         await bot_roll.reply(
-            f"<b><tg-emoji emoji-id=\"{EMOJI_LOSE}\">❌</tg-emoji> ПРОИГРЫШ</b>\n\n"
-            f"👤 {nickname}: {player_value}\n"
-            f"🤖 Бот: {bot_value}\n"
-            f"💸 -<code>{amount:.2f} USDT</code>",
+            f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
+            f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
             parse_mode='HTML'
         )
 
