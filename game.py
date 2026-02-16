@@ -37,6 +37,13 @@ EMOJI_CROSS = "5906949717859230132"
 EMOJI_ARROW_UP = "5906856435426279601"
 EMOJI_ARROW_DOWN = "5906856429256319396"
 EMOJI_TARGET = "5907049601640308729"
+EMOJI_CHET = "5330320040883411678"
+EMOJI_NECHET = "5391032818111363540"
+EMOJI_MORE = "5449683594425410231"
+EMOJI_LESS = "5447183459602669338"
+EMOJI_2MORE = "5429651785352501917"
+EMOJI_2LESS = "5429518319243775957"
+EMOJI_NUMBER = "5456140674028019486"
 
 # Конфигурации для ставок
 DICE_BET_TYPES = {
@@ -505,19 +512,19 @@ async def show_dice_menu(callback: CallbackQuery):
     """Показать меню кубика с кастомными эмодзи"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Нечет (x1.8)", callback_data="bet_dice_куб_нечет", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="Чет (x1.8)", callback_data="bet_dice_куб_чет", icon_custom_emoji_id=EMOJI_DICE)
+            InlineKeyboardButton(text="Нечет (x1.8)", callback_data="bet_dice_куб_нечет", icon_custom_emoji_id=EMOJI_NECHET),
+            InlineKeyboardButton(text="Чет (x1.8)", callback_data="bet_dice_куб_чет", icon_custom_emoji_id=EMOJI_CHET)
         ],
         [
-            InlineKeyboardButton(text="Меньше (x1.8)", callback_data="bet_dice_куб_мал", icon_custom_emoji_id=EMOJI_ARROW_DOWN),
-            InlineKeyboardButton(text="Больше (x1.8)", callback_data="bet_dice_куб_бол", icon_custom_emoji_id=EMOJI_ARROW_UP)
+            InlineKeyboardButton(text="Меньше (x1.8)", callback_data="bet_dice_куб_мал", icon_custom_emoji_id=EMOJI_LESS),
+            InlineKeyboardButton(text="Больше (x1.8)", callback_data="bet_dice_куб_бол", icon_custom_emoji_id=EMOJI_MORE)
         ],
         [
-            InlineKeyboardButton(text="2-меньше (x3.6)", callback_data="bet_dice_куб_2меньше", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="2-больше (x3.6)", callback_data="bet_dice_куб_2больше", icon_custom_emoji_id=EMOJI_DICE)
+            InlineKeyboardButton(text="2-меньше (x3.6)", callback_data="bet_dice_куб_2меньше", icon_custom_emoji_id=EMOJI_2LESS),
+            InlineKeyboardButton(text="2-больше (x3.6)", callback_data="bet_dice_куб_2больше", icon_custom_emoji_id=EMOJI_2MORE)
         ],
         [
-            InlineKeyboardButton(text="Точное число (x4)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_TARGET)
+            InlineKeyboardButton(text="Точное число (x4)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_NUMBER)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
