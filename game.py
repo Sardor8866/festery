@@ -617,7 +617,7 @@ async def show_darts_menu(callback: CallbackQuery):
     """Показать меню дартса"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⚪Белое (x1.85)", callback_data="bet_darts_дартс_белое", icon_custom_emoji_id=EMOJI_DARTS),
+            InlineKeyboardButton(text="⚪Белое (x2.35)", callback_data="bet_darts_дартс_белое", icon_custom_emoji_id=EMOJI_DARTS),
             InlineKeyboardButton(text="🔴Красное (x1.85)", callback_data="bet_darts_дартс_красное", icon_custom_emoji_id=EMOJI_DARTS)
         ],
         [
