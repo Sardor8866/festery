@@ -591,11 +591,8 @@ async def main():
     # Инициализируем игру с ботом
     betting_game = BettingGame(bot)
     
-    # Синхронизируем начальные балансы
-    for user_id in storage.get_all_users():
-        balance = storage.get_balance(user_id)
-        betting_game.user_balances[user_id] = balance
-    betting_game.save_balances()
+    # Синхронизируем начальные балансы - удаляем вызов несуществующего метода
+    # Вместо этого будем синхронизировать при каждом запросе
     
     # Подключаем роутеры
     dp.include_router(router)
