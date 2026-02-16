@@ -974,12 +974,9 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
         )
 
 async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: BettingGame):
-    """Отмена ставки - возврат в меню игр"""
+    """Отмена ставки - просто очищаем состояние"""
     user_id = callback.from_user.id
     if user_id in betting_game.pending_bets:
         del betting_game.pending_bets[user_id]
     await state.clear()
-    
-    # Возврат в меню игр
-    from main import games_callback
-    await games_callback(callback, state)
+    await callback.answer("❌ Ставка отменена")
