@@ -5,7 +5,7 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
-from aiogram.fsm.context import FSMContext  # Добавлен недостающий импорт
+from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
@@ -44,6 +44,11 @@ EMOJI_DEVELOPMENT = "5445355530111437729"
 EMOJI_WALLET = "5443127283898405358"
 EMOJI_STATS = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
+EMOJI_DICE = "5424972470023104089"
+EMOJI_BASKETBALL = "5424972470023104089"
+EMOJI_FOOTBALL = "5424972470023104089"
+EMOJI_DARTS = "5424972470023104089"
+EMOJI_BOWLING = "5424972470023104089"
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
@@ -67,6 +72,26 @@ user_state = {}  # user_id -> "deposit" or "withdraw"
 
 # Создаем экземпляр игры (будет инициализирован позже)
 betting_game = None
+
+# Функция для синхронизации балансов между платежной системой и игрой
+def sync_balances(user_id: int):
+    """Синхронизирует баланс между storage и betting_game"""
+    global betting_game
+    if betting_game and storage:
+        # Получаем баланс из storage (платежная система)
+        payment_balance = storage.get_balance(user_id)
+        # Получаем баланс из игры
+        game_balance = betting_game.get_balance(user_id)
+        
+        # Если балансы отличаются, обновляем игровой баланс
+        if abs(payment_balance - game_balance) > 0.01:
+            logging.info(f"Синхронизация баланса для user {user_id}: payment={payment_balance}, game={game_balance}")
+            # Устанавливаем баланс в игре равным балансу из платежной системы
+            betting_game.user_balances[user_id] = payment_balance
+            betting_game.save_balances()
+        
+        return payment_balance
+    return 0
 
 # Клавиатура главного меню
 def get_main_menu():
@@ -112,31 +137,31 @@ def get_games_menu():
             InlineKeyboardButton(
                 text="🎲 Кубик",
                 callback_data=GAME_CALLBACKS['dice'],
-                icon_custom_emoji_id=EMOJI_GAMES
+                icon_custom_emoji_id=EMOJI_DICE
             ),
             InlineKeyboardButton(
                 text="🏀 Баскетбол", 
                 callback_data=GAME_CALLBACKS['basketball'],
-                icon_custom_emoji_id=EMOJI_GAMES
+                icon_custom_emoji_id=EMOJI_BASKETBALL
             )
         ],
         [
             InlineKeyboardButton(
                 text="⚽ Футбол",
                 callback_data=GAME_CALLBACKS['football'],
-                icon_custom_emoji_id=EMOJI_GAMES
+                icon_custom_emoji_id=EMOJI_FOOTBALL
             ),
             InlineKeyboardButton(
                 text="🎯 Дартс",
                 callback_data=GAME_CALLBACKS['darts'],
-                icon_custom_emoji_id=EMOJI_GAMES
+                icon_custom_emoji_id=EMOJI_DARTS
             )
         ],
         [
             InlineKeyboardButton(
                 text="🎳 Боулинг",
                 callback_data=GAME_CALLBACKS['bowling'],
-                icon_custom_emoji_id=EMOJI_GAMES
+                icon_custom_emoji_id=EMOJI_BOWLING
             )
         ],
         [
@@ -174,11 +199,11 @@ def get_profile_menu():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# Клавиатура для отмены
+# Клавиатура для отмены (возвращает в профиль)
 def get_cancel_menu():
     buttons = [
         [InlineKeyboardButton(
-            text="Отмена", 
+            text="◀️ Отмена", 
             callback_data="profile",
             icon_custom_emoji_id=EMOJI_BACK
         )]
@@ -199,7 +224,7 @@ def get_main_menu_text():
 
 # Текст меню игр
 def get_games_menu_text(user_id: int):
-    balance = storage.get_balance(user_id) if storage else 0
+    balance = sync_balances(user_id)  # Синхронизируем и получаем баланс
     return f"""
 <blockquote><tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Игры</b></blockquote>
 
@@ -213,10 +238,10 @@ def get_games_menu_text(user_id: int):
 
 # Профиль с реальным балансом из storage
 def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
-    balance = storage.get_balance(user_id)
+    balance = sync_balances(user_id)  # Синхронизируем и получаем баланс
     user_data = storage.get_user(user_id)
-    total_deposits = user_data.get('total_deposits', balance * 0.7)
-    total_withdrawals = user_data.get('total_withdrawals', balance * 0.3)
+    total_deposits = user_data.get('total_deposits', 0)
+    total_withdrawals = user_data.get('total_withdrawals', 0)
     
     # Склонение слова "день"
     if 11 <= days_in_project <= 19:
@@ -245,6 +270,11 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
+        # Регистрируем пользователя в платежной системе
+        storage.get_user(message.from_user.id)
+        # Синхронизируем баланс
+        sync_balances(message.from_user.id)
+        
         await message.answer_sticker(sticker=WELCOME_STICKER_ID)
         await message.answer(
             get_main_menu_text(),
@@ -261,12 +291,16 @@ async def cmd_start(message: Message):
 
 # Профиль
 @router.callback_query(F.data == "profile")
-async def profile_callback(callback: CallbackQuery):
+async def profile_callback(callback: CallbackQuery, state: FSMContext):
     days_in_project = 30
     
     # Очищаем состояние пользователя
     if callback.from_user.id in user_state:
         del user_state[callback.from_user.id]
+    await state.clear()
+    
+    # Синхронизируем баланс перед показом
+    sync_balances(callback.from_user.id)
     
     await callback.message.edit_text(
         get_profile_text(
@@ -282,7 +316,12 @@ async def profile_callback(callback: CallbackQuery):
 
 # Игры
 @router.callback_query(F.data == "games")
-async def games_callback(callback: CallbackQuery):
+async def games_callback(callback: CallbackQuery, state: FSMContext):
+    # Очищаем состояние
+    if callback.from_user.id in user_state:
+        del user_state[callback.from_user.id]
+    await state.clear()
+    
     await callback.message.edit_text(
         get_games_menu_text(callback.from_user.id),
         parse_mode=ParseMode.HTML,
@@ -293,31 +332,43 @@ async def games_callback(callback: CallbackQuery):
 # Обработчики игр
 @router.callback_query(lambda c: c.data == GAME_CALLBACKS['dice'])
 async def game_dice_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед игрой
+    sync_balances(callback.from_user.id)
     await show_dice_menu(callback)
     await callback.answer()
 
 @router.callback_query(lambda c: c.data == GAME_CALLBACKS['basketball'])
 async def game_basketball_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед игрой
+    sync_balances(callback.from_user.id)
     await show_basketball_menu(callback)
     await callback.answer()
 
 @router.callback_query(lambda c: c.data == GAME_CALLBACKS['football'])
 async def game_football_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед игрой
+    sync_balances(callback.from_user.id)
     await show_football_menu(callback)
     await callback.answer()
 
 @router.callback_query(lambda c: c.data == GAME_CALLBACKS['darts'])
 async def game_darts_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед игрой
+    sync_balances(callback.from_user.id)
     await show_darts_menu(callback)
     await callback.answer()
 
 @router.callback_query(lambda c: c.data == GAME_CALLBACKS['bowling'])
 async def game_bowling_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед игрой
+    sync_balances(callback.from_user.id)
     await show_bowling_menu(callback)
     await callback.answer()
 
 @router.callback_query(lambda c: c.data.startswith('bet_'))
 async def bet_callback(callback: CallbackQuery, state: FSMContext):
+    # Синхронизируем баланс перед ставкой
+    sync_balances(callback.from_user.id)
     await request_amount(callback, state, betting_game)
     await callback.answer()
 
@@ -329,17 +380,22 @@ async def bet_exact_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data == 'cancel_bet')
 async def cancel_bet_callback(callback: CallbackQuery, state: FSMContext):
     await cancel_bet(callback, state, betting_game)
+    # После отмены возвращаемся в игры
+    await asyncio.sleep(1)
+    await games_callback(callback, state)
     await callback.answer()
 
 # Пополнение
 @router.callback_query(F.data == "deposit")
-async def deposit_callback(callback: CallbackQuery):
+async def deposit_callback(callback: CallbackQuery, state: FSMContext):
+    # Очищаем состояние FSM
+    await state.clear()
     # Устанавливаем состояние - пополнение
     user_state[callback.from_user.id] = "deposit"
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💰</tg-emoji> Введите сумму пополнения:</i></blockquote>",
+        f"<blockquote><i>Введите сумму пополнения (мин. {MIN_DEPOSIT} USDT):</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -347,7 +403,13 @@ async def deposit_callback(callback: CallbackQuery):
 
 # Вывод
 @router.callback_query(F.data == "withdraw")
-async def withdraw_callback(callback: CallbackQuery):
+async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
+    # Очищаем состояние FSM
+    await state.clear()
+    
+    # Синхронизируем баланс перед выводом
+    balance = sync_balances(callback.from_user.id)
+    
     # Проверяем задержку
     can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
     
@@ -365,7 +427,8 @@ async def withdraw_callback(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💰</tg-emoji> Введите сумму вывода:</i></blockquote>",
+        f"<blockquote><i>Введите сумму вывода (мин. {MIN_WITHDRAWAL} USDT):</i></blockquote>"
+        f"Доступно: <code>{balance:.2f} USDT</code>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -378,11 +441,16 @@ async def handle_amount_input(message: Message, state: FSMContext):
     user_id = message.from_user.id
     current_state = await state.get_state()
     
+    # Синхронизируем баланс
+    balance = sync_balances(user_id)
+    
     # Проверяем, не в процессе ли ставки
     if current_state:
         # Если в процессе ставки - передаем в game.py
         from game import process_bet_amount
         await process_bet_amount(message, state, betting_game)
+        # После ставки синхронизируем баланс
+        sync_balances(user_id)
         return
     
     state_type = user_state.get(user_id)
@@ -409,11 +477,11 @@ async def handle_amount_input(message: Message, state: FSMContext):
                 )
                 return
             await process_deposit(message)
+            # После пополнения синхронизируем баланс
+            sync_balances(user_id)
             
         elif state_type == "withdraw":
             # Вывод
-            balance = storage.get_balance(user_id)
-            
             if amount < MIN_WITHDRAWAL:
                 await message.answer(
                     f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT",
@@ -440,6 +508,8 @@ async def handle_amount_input(message: Message, state: FSMContext):
                 return
             
             await process_withdraw(message)
+            # После вывода синхронизируем баланс
+            sync_balances(user_id)
             
         # Очищаем состояние после успешной операции
         if user_id in user_state:
@@ -450,7 +520,8 @@ async def handle_amount_input(message: Message, state: FSMContext):
 
 # Партнёры
 @router.callback_query(F.data == "partners")
-async def partners_callback(callback: CallbackQuery):
+async def partners_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
@@ -464,7 +535,8 @@ async def partners_callback(callback: CallbackQuery):
 
 # Лидеры
 @router.callback_query(F.data == "leaders")
-async def leaders_callback(callback: CallbackQuery):
+async def leaders_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
         f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
@@ -478,7 +550,8 @@ async def leaders_callback(callback: CallbackQuery):
 
 # О проекте
 @router.callback_query(F.data == "about")
-async def about_callback(callback: CallbackQuery):
+async def about_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.edit_text(
         f'<tg-emoji emoji-id="{EMOJI_ABOUT}">ℹ️</tg-emoji> <b>О проекте</b>\n\n'
         f'Мы — команда профессионалов, создающая честный гемблинг с 2020 года.\n\n'
@@ -517,6 +590,12 @@ async def main():
     
     # Инициализируем игру с ботом
     betting_game = BettingGame(bot)
+    
+    # Синхронизируем начальные балансы
+    for user_id in storage.get_all_users():
+        balance = storage.get_balance(user_id)
+        betting_game.user_balances[user_id] = balance
+    betting_game.save_balances()
     
     # Подключаем роутеры
     dp.include_router(router)
