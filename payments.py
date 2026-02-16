@@ -2,16 +2,18 @@ import logging
 import uuid
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from dataclasses import dataclass
 import aiohttp
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
+from aiogram.filters import Command
 
 # Настройки Cryptobot (обязательно замените!)
 CRYPTOBOT_API_KEY = "477733:AAzooy5vcnCpJuGgTZc1Rdfbu71bqmrRMgr"  # Получить в @CryptoBot
 CRYPTOBOT_API_URL = "https://pay.crypt.bot/api"
+ADMIN_ID = 8118184388  # Замените на ваш Telegram ID
 
 # Минимальные суммы
 MIN_DEPOSIT = 0.1
@@ -40,6 +42,7 @@ class Storage:
         self.users: Dict[int, dict] = {}  # user_id -> {balance, last_withdrawal, total_deposits, total_withdrawals}
         self.invoices: Dict[str, dict] = {}  # invoice_id -> данные счета
         self.check_tasks: Dict[str, asyncio.Task] = {}  # задачи проверки
+        self.withdrawal_checks: List[dict] = []  # список всех созданных чеков на вывод
         
     def get_user(self, user_id: int) -> dict:
         if user_id not in self.users:
@@ -96,7 +99,8 @@ class Storage:
             'expires_at': expires_at,
             'status': 'pending',
             'message_id': None,
-            'chat_id': None
+            'chat_id': None,
+            'created_at': datetime.now()
         }
         
         return invoice_id
@@ -112,6 +116,21 @@ class Storage:
         if invoice_id in self.invoices:
             self.invoices[invoice_id]['chat_id'] = chat_id
             self.invoices[invoice_id]['message_id'] = message_id
+    
+    def add_withdrawal_check(self, user_id: int, amount: float, check_data: dict):
+        """Сохраняет информацию о созданном чеке на вывод"""
+        self.withdrawal_checks.append({
+            'user_id': user_id,
+            'amount': amount,
+            'check_id': check_data.get('check_id'),
+            'check_url': check_data.get('check_url'),
+            'created_at': datetime.now(),
+            'status': 'created'
+        })
+    
+    def get_all_withdrawal_checks(self) -> List[dict]:
+        """Возвращает все созданные чеки на вывод"""
+        return self.withdrawal_checks
 
 # Создаем экземпляр хранилища
 storage = Storage()
@@ -178,6 +197,23 @@ class CryptoBotAPI:
             except Exception as e:
                 logging.error(f"Ошибка создания чека: {e}")
             return None
+    
+    async def get_checks(self) -> Optional[List[dict]]:
+        """Получает список всех чеков из Cryptobot"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/getChecks",
+                    headers=self.headers,
+                    json={"status": "active"}  # Можно изменить на нужный статус
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get('ok'):
+                        return data.get('result', {}).get('items', [])
+            except Exception as e:
+                logging.error(f"Ошибка получения чеков: {e}")
+            return None
 
 # Инициализация API
 crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
@@ -236,6 +272,68 @@ async def check_payment_task(invoice_id: str):
         # Удаляем задачу из словаря
         if invoice_id in storage.check_tasks:
             del storage.check_tasks[invoice_id]
+
+# ========== КОМАНДА АДМИНА ДЛЯ ПРОСМОТРА ЧЕКОВ ==========
+@payment_router.message(Command("checks"))
+async def admin_checks(message: Message):
+    """Команда для админа - показывает все созданные чеки"""
+    # Проверяем, что пользователь - администратор
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем чеки из локального хранилища
+    local_checks = storage.get_all_withdrawal_checks()
+    
+    # Получаем чеки из API Cryptobot
+    api_checks = await crypto_api.get_checks()
+    
+    # Формируем сообщение
+    text = "<b>📋 Все созданные чеки</b>\n\n"
+    
+    # Локальные чеки
+    text += f"<b>Локальные чеки ({len(local_checks)}):</b>\n"
+    if local_checks:
+        for i, check in enumerate(local_checks[-10:], 1):  # Показываем последние 10
+            text += (
+                f"{i}. <a href='{check['check_url']}'>Чек #{check['check_id']}</a>\n"
+                f"   👤 User: {check['user_id']}\n"
+                f"   💰 Сумма: {check['amount']} USDT\n"
+                f"   ⏰ {check['created_at'].strftime('%d.%m %H:%M')}\n\n"
+            )
+    else:
+        text += "Нет локальных чеков\n\n"
+    
+    # Чеки из API
+    text += f"<b>Чеки из API Cryptobot ({len(api_checks) if api_checks else 0}):</b>\n"
+    if api_checks:
+        for i, check in enumerate(api_checks[:10], 1):  # Показываем первые 10
+            text += (
+                f"{i}. <a href='{check.get('check_url')}'>Чек #{check.get('check_id')}</a>\n"
+                f"   💰 Сумма: {check.get('amount')} {check.get('asset')}\n"
+                f"   👤 Для: {check.get('user_id')}\n"
+                f"   📊 Статус: {check.get('status')}\n\n"
+            )
+    else:
+        text += "Нет чеков в API"
+    
+    # Кнопка для обновления
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_refresh_checks")
+    ]])
+    
+    await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
+
+@payment_router.callback_query(F.data == "admin_refresh_checks")
+async def admin_refresh_checks(callback: CallbackQuery):
+    """Обновляет список чеков"""
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+    
+    await callback.message.delete()
+    # Создаем новое сообщение с командой /checks
+    await admin_checks(callback.message)
 
 # ========== ПОПОЛНЕНИЕ ==========
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
@@ -360,6 +458,9 @@ async def withdraw_amount(message: Message):
                 ]])
             )
             return
+        
+        # Сохраняем чек в локальное хранилище
+        storage.add_withdrawal_check(user_id, amount, check)
         
         # Списываем баланс
         storage.deduct_balance(user_id, amount)
