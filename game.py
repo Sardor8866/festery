@@ -384,12 +384,6 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             nickname += f" {message.from_user.last_name}"
         nickname = nickname.strip() or message.from_user.username or "Игрок"
         
-        # Удаляем сообщение с запросом суммы
-        try:
-            await message.delete()
-        except:
-            pass
-        
         # Запускаем игру
         try:
             if bet_type in ['куб_2меньше', 'куб_2больше']:
