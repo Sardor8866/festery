@@ -115,11 +115,11 @@ COMMAND_MAPPING = {
 
 # Маппинг типов ставок (ПОЛНЫЙ СПИСОК)
 BET_TYPE_MAPPING = {
-    # Футбол
-    'гол': 'футбол_гол',
-    'goal': 'футбол_гол',
-    'мимо': 'футбол_мимо',
-    'miss': 'футбол_мимо',
+    # Футбол - гол и мимо обрабатываются в parse_bet_command
+    # 'гол': обрабатывается специально
+    # 'goal': обрабатывается специально
+    # 'мимо': обрабатывается специально
+    # 'miss': обрабатывается специально
     
     # Баскетбол
     '3очка': 'баскет_3очка',
@@ -127,8 +127,7 @@ BET_TYPE_MAPPING = {
     '3': 'баскет_3очка',
     'три': 'баскет_3очка',
     'three': 'баскет_3очка',
-    'гол': 'баскет_гол',
-    'goal': 'баскет_гол',
+    # гол и мимо обрабатываются в parse_bet_command
     
     # Кубик - ВСЕ ИСХОДЫ
     'нечет': 'куб_нечет',
@@ -185,6 +184,7 @@ BET_TYPE_MAPPING = {
     'центр': 'дартс_центр',
     'center': 'дартс_центр',
     'bull': 'дартс_центр',
+    # мимо обрабатывается в parse_bet_command
     
     # Боулинг - ВСЕ ИСХОДЫ
     'победа': 'боулинг_победа',
@@ -336,12 +336,24 @@ def parse_bet_command(text: str) -> Optional[Tuple[str, float]]:
     if not game_prefix:
         return None
     
-    # Для баскетбола гол и мимо тоже работают
+    # Специальная обработка для каждой игры
     if game_prefix == 'баскет':
         if bet_type_key in ['гол', 'goal']:
             full_bet_type = 'баскет_гол'
         elif bet_type_key in ['мимо', 'miss']:
             full_bet_type = 'баскет_мимо'
+        else:
+            full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
+    elif game_prefix == 'футбол':
+        if bet_type_key in ['гол', 'goal']:
+            full_bet_type = 'футбол_гол'
+        elif bet_type_key in ['мимо', 'miss']:
+            full_bet_type = 'футбол_мимо'
+        else:
+            full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
+    elif game_prefix == 'дартс':
+        if bet_type_key in ['мимо', 'miss']:
+            full_bet_type = 'дартс_мимо'
         else:
             full_bet_type = BET_TYPE_MAPPING.get(bet_type_key)
     else:
@@ -464,11 +476,11 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
     try:
         # Запускаем игру
         if bet_type in ['куб_2меньше', 'куб_2больше']:
-            await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+            await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
         elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
-            await play_bowling_vs_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+            await play_bowling_vs_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
         else:
-            await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+            await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
     except Exception as e:
         logging.error(f"Ошибка в игре: {e}")
         # Возвращаем средства
@@ -770,11 +782,11 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
         # Запускаем игру
         try:
             if bet_type in ['куб_2меньше', 'куб_2больше']:
-                await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+                await play_double_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
             elif bet_type.startswith('боулинг_') and bet_config.get('special') == 'bowling_vs':
-                await play_bowling_vs_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+                await play_bowling_vs_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
             else:
-                await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game)
+                await play_single_dice_game(message.chat.id, user_id, nickname, amount, bet_type, bet_config, betting_game, message)
         except Exception as e:
             logging.error(f"Ошибка в игре: {e}")
             # Возвращаем средства при ошибке
@@ -797,7 +809,7 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             del betting_game.pending_bets[user_id]
         await state.clear()
 
-async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame):
+async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame, reply_to_message: Message = None):
     """Игра с одним броском"""
     # Определяем эмодзи
     if bet_type.startswith('куб_'):
@@ -813,7 +825,16 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     else:
         emoji = "🎲"
     
-    dice_message = await betting_game.bot.send_dice(chat_id, emoji=emoji)
+    # Отправляем кубик в ответ на сообщение пользователя если оно есть
+    if reply_to_message:
+        dice_message = await betting_game.bot.send_dice(
+            chat_id, 
+            emoji=emoji,
+            reply_to_message_id=reply_to_message.message_id
+        )
+    else:
+        dice_message = await betting_game.bot.send_dice(chat_id, emoji=emoji)
+    
     await asyncio.sleep(3)
     
     dice_value = dice_message.dice.value
@@ -842,9 +863,18 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
             parse_mode='HTML'
         )
 
-async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame):
+async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame, reply_to_message: Message = None):
     """Игра с двумя кубиками"""
-    dice1 = await betting_game.bot.send_dice(chat_id, emoji="🎲")
+    # Отправляем первый кубик в ответ на сообщение пользователя если оно есть
+    if reply_to_message:
+        dice1 = await betting_game.bot.send_dice(
+            chat_id, 
+            emoji="🎲",
+            reply_to_message_id=reply_to_message.message_id
+        )
+    else:
+        dice1 = await betting_game.bot.send_dice(chat_id, emoji="🎲")
+    
     await asyncio.sleep(2)
     
     dice2 = await betting_game.bot.send_dice(chat_id, emoji="🎲")
@@ -882,9 +912,18 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
             parse_mode='HTML'
         )
 
-async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame):
+async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount: float, bet_type: str, bet_config: dict, betting_game: BettingGame, reply_to_message: Message = None):
     """Игра в боулинг против бота"""
-    player_roll = await betting_game.bot.send_dice(chat_id, emoji="🎳")
+    # Отправляем первый бросок в ответ на сообщение пользователя если оно есть
+    if reply_to_message:
+        player_roll = await betting_game.bot.send_dice(
+            chat_id, 
+            emoji="🎳",
+            reply_to_message_id=reply_to_message.message_id
+        )
+    else:
+        player_roll = await betting_game.bot.send_dice(chat_id, emoji="🎳")
+    
     await asyncio.sleep(2)
     
     bot_roll = await betting_game.bot.send_dice(chat_id, emoji="🎳")
