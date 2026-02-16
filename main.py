@@ -112,18 +112,18 @@ def get_main_menu():
 def get_games_menu():
     buttons = [
         [
-            InlineKeyboardButton(text="🎲Кубик", callback_data=GAME_CALLBACKS['dice'],
-            InlineKeyboardButton(text="🏀Баскетбол", callback_data=GAME_CALLBACKS['basketball'],
+            InlineKeyboardButton(text="🎲 Кубик", callback_data=GAME_CALLBACKS['dice']),
+            InlineKeyboardButton(text="🏀 Баскетбол", callback_data=GAME_CALLBACKS['basketball'])
         ],
         [
-            InlineKeyboardButton(text="⚽️Футбол", callback_data=GAME_CALLBACKS['football'],
-            InlineKeyboardButton(text="🎯Дартс", callback_data=GAME_CALLBACKS['darts'],
+            InlineKeyboardButton(text="⚽️ Футбол", callback_data=GAME_CALLBACKS['football']),
+            InlineKeyboardButton(text="🎯 Дартс", callback_data=GAME_CALLBACKS['darts'])
         ],
         [
-            InlineKeyboardButton(text="🎳Боулинг", callback_data=GAME_CALLBACKS['bowling'],
+            InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
         ],
         [
-            InlineKeyboardButton(text="Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
+            InlineKeyboardButton(text="◀️ Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
