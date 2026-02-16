@@ -147,8 +147,8 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=Non
         )
     except Exception as e:
         logging.error(f"Error editing message: {e}")
+        # Если не получается отредактировать, отправляем новое сообщение
         try:
-            await callback.message.delete()
             await callback.message.answer(
                 text,
                 parse_mode=parse_mode,
@@ -475,13 +475,9 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             nickname += f" {message.from_user.last_name}"
         nickname = nickname.strip() or message.from_user.username or "Игрок"
         
-        # Удаляем сообщение с запросом суммы (предыдущее сообщение от бота)
+        # Удаляем сообщение с запросом суммы
         try:
-            # Пытаемся найти и удалить предыдущее сообщение бота
-            async for msg in betting_game.bot.get_chat_history(message.chat.id, limit=2):
-                if msg.from_user and msg.from_user.id == betting_game.bot.id:
-                    await msg.delete()
-                    break
+            await message.delete()
         except:
             pass
         
@@ -661,15 +657,13 @@ async def cancel_bet(callback: CallbackQuery, state: FSMContext, betting_game: B
         del betting_game.pending_bets[user_id]
     await state.clear()
     
-    # Отправляем сообщение об отмене
-    try:
-        await callback.message.edit_text("❌ Ставка отменена")
-        await asyncio.sleep(1)
-        await callback.message.delete()
-    except:
-        pass
+    # Показываем сообщение об отмене
+    await callback.message.edit_text(
+        "❌ Ставка отменена. Возврат в меню игр...",
+        reply_markup=None
+    )
+    await asyncio.sleep(1)
     
-    # Импортируем функцию для показа меню игр из main
-    # Примечание: эта функция должна быть доступна в main.py
+    # Импортируем функцию для показа меню игр
     from main import games_callback
     await games_callback(callback, state)
