@@ -173,9 +173,13 @@ class CryptoBotAPI:
                         "pin_to_user_id": str(user_id)
                     }
                 )
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get('result') if data.get('ok') else None
+                data = await resp.json()
+                logging.info(f"createCheck response (status={resp.status}): {data}")
+                if resp.status == 200 and data.get("ok"):
+                    return data.get("result")
+                else:
+                    logging.error(f"createCheck error: {data}")
+                    return None
             except Exception as e:
                 logging.error(f"Ошибка создания чека: {e}")
             return None
