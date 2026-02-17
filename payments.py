@@ -3,27 +3,24 @@ import uuid
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, Dict
-from dataclasses import dataclass
 import aiohttp
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 
-# Настройки Cryptobot (обязательно замените!)
-CRYPTOBOT_API_KEY = "477733:AAzooy5vcnCpJuGgTZc1Rdfbu71bqmrRMgr"  # Получить в @CryptoBot
+# Настройки Cryptobot
+CRYPTOBOT_API_KEY = "477733:AAzooy5vcnCpJuGgTZc1Rdfbu71bqmrRMgr"
 CRYPTOBOT_API_URL = "https://pay.crypt.bot/api"
 
 # Минимальные суммы
 MIN_DEPOSIT = 0.1
-MIN_WITHDRAWAL = 0.2  # ← изменено с 1.5
+MIN_WITHDRAWAL = 0.2
 
 # Задержка между выводами (3 минуты)
-WITHDRAWAL_COOLDOWN = 180  # секунд
+WITHDRAWAL_COOLDOWN = 180
 
 # Время жизни счета (5 минут)
-INVOICE_LIFETIME = 300  # секунд
+INVOICE_LIFETIME = 300
 
 # Эмодзи
 EMOJI_CRYPTOBOT = "5427054176246991778"
@@ -35,15 +32,7 @@ EMOJI_ERROR = "5197923386472879129"
 EMOJI_LINK = "5271604874419647061"
 
 payment_router = Router()
-bot: Bot = None  # Установится через setup_payments
-
-
-# ========== FSM СОСТОЯНИЯ ==========
-# ВАЖНО: в вашем main.py нужно добавить эти состояния
-# и переводить пользователя в нужное состояние при нажатии кнопок
-class PaymentStates(StatesGroup):
-    waiting_deposit_amount = State()
-    waiting_withdraw_amount = State()
+bot: Bot = None
 
 
 # ========== ХРАНИЛИЩЕ ==========
@@ -52,6 +41,18 @@ class Storage:
         self.users: Dict[int, dict] = {}
         self.invoices: Dict[str, dict] = {}
         self.check_tasks: Dict[str, asyncio.Task] = {}
+        # Хранит текущее ожидаемое действие: 'deposit' или 'withdraw'
+        self.pending_action: Dict[int, str] = {}
+
+    def set_pending(self, user_id: int, action: str):
+        """Устанавливает ожидаемое действие: 'deposit' или 'withdraw'"""
+        self.pending_action[user_id] = action
+
+    def get_pending(self, user_id: int) -> Optional[str]:
+        return self.pending_action.get(user_id)
+
+    def clear_pending(self, user_id: int):
+        self.pending_action.pop(user_id, None)
 
     def get_user(self, user_id: int) -> dict:
         if user_id not in self.users:
@@ -189,16 +190,12 @@ crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
 
 # ========== ЗАДАЧА ПРОВЕРКИ ОПЛАТЫ ==========
 async def check_payment_task(invoice_id: str):
-    """Проверяет оплату каждые 2 секунды, обновляет сообщение"""
+    """Проверяет оплату каждые 2 секунды, обновляет сообщение при оплате"""
     try:
-        invoice = storage.get_invoice(invoice_id)
-        if not invoice:
-            return
+        # Небольшая пауза чтобы set_message_info успел сохраниться
+        await asyncio.sleep(2)
 
-        for attempt in range(150):
-            await asyncio.sleep(2)  # ← sleep в начале, чтобы Cryptobot успел зарегистрировать счет
-
-            # Перечитываем актуальные данные счета (chat_id/message_id могут появиться чуть позже)
+        for attempt in range(149):
             invoice = storage.get_invoice(invoice_id)
             if not invoice:
                 return
@@ -220,7 +217,7 @@ async def check_payment_task(invoice_id: str):
                             ]])
                         )
                     except Exception as e:
-                        logging.error(f"Ошибка редактирования сообщения (expired): {e}")
+                        logging.error(f"Ошибка редактирования (expired): {e}")
                 storage.update_invoice_status(invoice_id, 'expired')
                 return
 
@@ -228,11 +225,9 @@ async def check_payment_task(invoice_id: str):
             status = await crypto_api.get_invoice_status(invoice['crypto_id'])
 
             if status == 'paid':
-                # Зачисляем баланс
                 storage.add_balance(invoice['user_id'], invoice['amount'])
                 storage.update_invoice_status(invoice_id, 'paid')
 
-                # ← ИСПРАВЛЕНИЕ: обновляем сообщение с подтверждением оплаты
                 if invoice.get('chat_id') and invoice.get('message_id'):
                     try:
                         await bot.edit_message_text(
@@ -249,8 +244,10 @@ async def check_payment_task(invoice_id: str):
                             ]])
                         )
                     except Exception as e:
-                        logging.error(f"Ошибка редактирования сообщения (paid): {e}")
+                        logging.error(f"Ошибка редактирования (paid): {e}")
                 return
+
+            await asyncio.sleep(2)
 
     except Exception as e:
         logging.error(f"Ошибка в задаче проверки: {e}")
@@ -259,13 +256,24 @@ async def check_payment_task(invoice_id: str):
             del storage.check_tasks[invoice_id]
 
 
-# ========== ПОПОЛНЕНИЕ ==========
-# Фильтр: состояние waiting_deposit_amount — только тогда обрабатываем как депозит
-@payment_router.message(PaymentStates.waiting_deposit_amount, F.text.regexp(r'^\d+\.?\d*$'))
-async def deposit_amount(message: Message, state: FSMContext):
-    """Обработка введенной суммы для пополнения"""
-    await state.clear()  # Сбрасываем состояние
+# ========== ЕДИНЫЙ ХЕНДЛЕР ВВОДА СУММЫ ==========
+@payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
+async def handle_amount_input(message: Message):
+    """Один хендлер — внутри смотрим pending_action и вызываем нужную функцию"""
+    user_id = message.from_user.id
+    action = storage.get_pending(user_id)
 
+    if action == 'deposit':
+        storage.clear_pending(user_id)
+        await _process_deposit(message, user_id)
+    elif action == 'withdraw':
+        storage.clear_pending(user_id)
+        await _process_withdraw(message, user_id)
+    # Нет pending_action — просто игнорируем
+
+
+# ========== ЛОГИКА ПОПОЛНЕНИЯ ==========
+async def _process_deposit(message: Message, user_id: int):
     try:
         amount = float(message.text)
 
@@ -278,7 +286,6 @@ async def deposit_amount(message: Message, state: FSMContext):
             )
             return
 
-        # Создаем счет в Cryptobot
         invoice_data = await crypto_api.create_invoice(amount)
 
         if not invoice_data or 'pay_url' not in invoice_data:
@@ -290,9 +297,8 @@ async def deposit_amount(message: Message, state: FSMContext):
             )
             return
 
-        # Сохраняем счет
         invoice_id = storage.create_invoice(
-            message.from_user.id,
+            user_id,
             amount,
             invoice_data['invoice_id'],
             invoice_data['pay_url']
@@ -300,42 +306,32 @@ async def deposit_amount(message: Message, state: FSMContext):
 
         sent_msg = await message.answer(
             text=(
-                f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji> Счет создан!</b>\n\n"
-                f"<blockquote>"
-                f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji> Сумма: <b><code>{amount}</code> USDT</b>\n"
-                f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji> Действует: <b>5 минут</b>"
-                f"</blockquote>\n\n"
-                f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji> Ожидаем оплату..."
+                f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji>Счет Создан!</b>\n\n"
+                f"<blockquote><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: <b><code>{amount}</code></b>\n"
+                f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji>Действует-<b>5 минут</b></blockquote>\n\n"
+                f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату!"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Оплатить", url=invoice_data['pay_url'], icon_custom_emoji_id=EMOJI_LINK)],
-                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)]
+                [InlineKeyboardButton(text="Оплатить", url=invoice_data['pay_url'], icon_custom_emoji_id=EMOJI_LINK)],
+                [InlineKeyboardButton(text="Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)]
             ])
         )
 
-        # Сохраняем chat_id и message_id для последующего редактирования
         storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
 
-        # Запускаем фоновую проверку
         if invoice_id not in storage.check_tasks:
             task = asyncio.create_task(check_payment_task(invoice_id))
             storage.check_tasks[invoice_id] = task
 
     except ValueError:
-        await message.answer("❌ Введите корректное число")
+        await message.answer("❌ Введите число")
 
 
-# ========== ВЫВОД ==========
-# Фильтр: состояние waiting_withdraw_amount — только тогда обрабатываем как вывод
-@payment_router.message(PaymentStates.waiting_withdraw_amount, F.text.regexp(r'^\d+\.?\d*$'))
-async def withdraw_amount(message: Message, state: FSMContext):
-    """Обработка суммы вывода"""
-    await state.clear()  # Сбрасываем состояние
-
+# ========== ЛОГИКА ВЫВОДА ==========
+async def _process_withdraw(message: Message, user_id: int):
     try:
         amount = float(message.text)
-        user_id = message.from_user.id
         balance = storage.get_balance(user_id)
 
         if amount < MIN_WITHDRAWAL:
@@ -349,29 +345,25 @@ async def withdraw_amount(message: Message, state: FSMContext):
 
         if amount > balance:
             await message.answer(
-                f"❌ Недостаточно средств.\nВаш баланс: <b>{balance:.2f} USDT</b>",
-                parse_mode=ParseMode.HTML,
+                f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
 
-        # Проверяем cooldown
         can_withdraw, wait_time = storage.can_withdraw(user_id)
         if not can_withdraw:
             minutes = wait_time // 60
             seconds = wait_time % 60
             await message.answer(
-                f"⏳ Следующий вывод доступен через <b>{minutes} мин {seconds} сек</b>",
-                parse_mode=ParseMode.HTML,
+                f"⏳ Подождите {minutes} мин {seconds} сек",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                 ]])
             )
             return
 
-        # Создаем чек в Cryptobot
         check = await crypto_api.create_check(amount, user_id)
 
         if not check or 'check_url' not in check:
@@ -383,17 +375,15 @@ async def withdraw_amount(message: Message, state: FSMContext):
             )
             return
 
-        # Списываем баланс только после успешного создания чека
         storage.deduct_balance(user_id, amount)
         storage.set_last_withdrawal(user_id)
 
-        # ← ИСПРАВЛЕНИЕ: отправляем сообщение с кнопкой-ссылкой на чек
         await message.answer(
             text=(
                 f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Чек создан!</b>\n\n"
                 f"Сумма: <b>{amount} USDT</b>\n"
                 f"Новый баланс: <b>{storage.get_balance(user_id):.2f} USDT</b>\n\n"
-                f"Нажмите кнопку ниже, чтобы получить чек в @CryptoBot"
+                f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -403,7 +393,7 @@ async def withdraw_amount(message: Message, state: FSMContext):
         )
 
     except ValueError:
-        await message.answer("❌ Введите корректное число")
+        await message.answer("❌ Введите число")
 
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
