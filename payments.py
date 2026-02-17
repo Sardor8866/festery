@@ -394,7 +394,7 @@ async def _process_withdraw(message: Message, user_id: int):
 
         await message.answer(
             text=(
-                f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Чек создан!</b>\n\n"
+                f"<b>Чек создан!</b>\n\n"
                 f"Сумма: <b>{amount} USDT</b>\n"
                 f"Новый баланс: <b>{storage.get_balance(user_id):.2f} USDT</b>\n\n"
                 f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
