@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict
 import aiohttp
 from aiogram import Router, F, Bot
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
 
 # Настройки Cryptobot
@@ -23,9 +23,6 @@ WITHDRAWAL_COOLDOWN = 180
 INVOICE_LIFETIME = 300
 
 # Эмодзи
-EMOJI_CRYPTOBOT = "5427054176246991778"
-EMOJI_WALLET = "5443127283898405358"
-EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_BACK = "5906771962734057347"
 EMOJI_SUCCESS = "5199436362280976367"
 EMOJI_ERROR = "5197923386472879129"
@@ -41,11 +38,10 @@ class Storage:
         self.users: Dict[int, dict] = {}
         self.invoices: Dict[str, dict] = {}
         self.check_tasks: Dict[str, asyncio.Task] = {}
-        # Хранит текущее ожидаемое действие: 'deposit' или 'withdraw'
+        # Ожидаемое действие пользователя: 'deposit' или 'withdraw'
         self.pending_action: Dict[int, str] = {}
 
     def set_pending(self, user_id: int, action: str):
-        """Устанавливает ожидаемое действие: 'deposit' или 'withdraw'"""
         self.pending_action[user_id] = action
 
     def get_pending(self, user_id: int) -> Optional[str]:
@@ -57,10 +53,10 @@ class Storage:
     def get_user(self, user_id: int) -> dict:
         if user_id not in self.users:
             self.users[user_id] = {
-                'balance': 1000.0,
+                'balance': 0.0,
                 'last_withdrawal': None,
-                'total_deposits': 3500.0,
-                'total_withdrawals': 2250.0
+                'total_deposits': 0.0,
+                'total_withdrawals': 0.0
             }
         return self.users[user_id]
 
@@ -188,19 +184,18 @@ class CryptoBotAPI:
 crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
 
 
-# ========== ЗАДАЧА ПРОВЕРКИ ОПЛАТЫ ==========
+# ========== ФОНОВАЯ ПРОВЕРКА ОПЛАТЫ ==========
 async def check_payment_task(invoice_id: str):
-    """Проверяет оплату каждые 2 секунды, обновляет сообщение при оплате"""
+    """Проверяет оплату каждые 2 секунды, обновляет сообщение при оплате/истечении"""
     try:
-        # Небольшая пауза чтобы set_message_info успел сохраниться
-        await asyncio.sleep(2)
+        await asyncio.sleep(2)  # Ждем пока set_message_info сохранится
 
         for attempt in range(149):
             invoice = storage.get_invoice(invoice_id)
             if not invoice:
                 return
 
-            # Проверяем истечение срока
+            # Счет истек
             if datetime.now() > invoice['expires_at']:
                 if invoice.get('chat_id') and invoice.get('message_id'):
                     try:
@@ -256,10 +251,10 @@ async def check_payment_task(invoice_id: str):
             del storage.check_tasks[invoice_id]
 
 
-# ========== ЕДИНЫЙ ХЕНДЛЕР ВВОДА СУММЫ ==========
+# ========== ХЕНДЛЕР ВВОДА СУММЫ ==========
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message):
-    """Один хендлер — внутри смотрим pending_action и вызываем нужную функцию"""
+    """Единый обработчик числового ввода — смотрит pending_action"""
     user_id = message.from_user.id
     action = storage.get_pending(user_id)
 
@@ -269,10 +264,10 @@ async def handle_amount_input(message: Message):
     elif action == 'withdraw':
         storage.clear_pending(user_id)
         await _process_withdraw(message, user_id)
-    # Нет pending_action — просто игнорируем
+    # Нет pending — не наш ввод, игнорируем
 
 
-# ========== ЛОГИКА ПОПОЛНЕНИЯ ==========
+# ========== ПОПОЛНЕНИЕ ==========
 async def _process_deposit(message: Message, user_id: int):
     try:
         amount = float(message.text)
@@ -328,7 +323,7 @@ async def _process_deposit(message: Message, user_id: int):
         await message.answer("❌ Введите число")
 
 
-# ========== ЛОГИКА ВЫВОДА ==========
+# ========== ВЫВОД ==========
 async def _process_withdraw(message: Message, user_id: int):
     try:
         amount = float(message.text)
