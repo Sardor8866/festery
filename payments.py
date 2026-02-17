@@ -36,6 +36,9 @@ EMOJI_LINK = "5271604874419647061"
 payment_router = Router()
 bot: Bot = None  # Установится через setup_payments
 
+# Общий словарь состояний пользователя (импортируется в main.py вместо локального user_state)
+payments_user_state: Dict[int, str] = {}
+
 # Простое хранилище (в реальном проекте замените на БД)
 class Storage:
     def __init__(self):
@@ -274,14 +277,9 @@ async def check_payment_task(invoice_id: str):
             del storage.check_tasks[invoice_id]
 
 # ========== КОМАНДА АДМИНА ДЛЯ ПРОСМОТРА ЧЕКОВ ==========
-@payment_router.message(Command("checks"))
-async def admin_checks(message: Message):
-    """Команда для админа - показывает все созданные чеки"""
-    # Проверяем, что пользователь - администратор
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("❌ У вас нет прав для выполнения этой команды")
-        return
-    
+
+async def _send_checks_to(admin_user_id: int, chat_id: int):
+    """Внутренняя функция — собирает и отправляет список чеков в нужный чат"""
     # Получаем чеки из локального хранилища
     local_checks = storage.get_all_withdrawal_checks()
     
@@ -369,12 +367,21 @@ async def admin_checks(message: Message):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
-    await message.answer(
-        text, 
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text, 
         parse_mode=ParseMode.HTML, 
         reply_markup=keyboard,
-        disable_web_page_preview=False  # Разрешаем предпросмотр ссылок
+        disable_web_page_preview=False
     )
+
+@payment_router.message(Command("checks"))
+async def admin_checks(message: Message):
+    """Команда для админа - показывает все созданные чеки"""
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    await _send_checks_to(message.from_user.id, message.chat.id)
 
 @payment_router.callback_query(F.data == "admin_refresh_checks")
 async def admin_refresh_checks(callback: CallbackQuery):
@@ -383,17 +390,28 @@ async def admin_refresh_checks(callback: CallbackQuery):
         await callback.answer("❌ Нет доступа", show_alert=True)
         return
     
+    await callback.answer("🔄 Обновляю...")
     await callback.message.delete()
-    # Создаем новое сообщение с командой /checks
-    await admin_checks(callback.message)
+    # Вызываем логику напрямую, используя from_user из callback (не из message)
+    await _send_checks_to(callback.from_user.id, callback.message.chat.id)
 
-# ========== ПОПОЛНЕНИЕ ==========
+# ========== ПОПОЛНЕНИЕ И ВЫВОД ==========
+# Единый хендлер для числовых сообщений — определяем действие по user_state
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
-async def deposit_amount(message: Message):
-    """Обработка введенной суммы для пополнения"""
+async def handle_amount(message: Message):
+    """Обрабатывает введённую сумму: пополнение или вывод — в зависимости от user_state"""
+    user_id = message.from_user.id
+    # user_state импортируется из main через payments_user_state (общий словарь)
+    action = payments_user_state.get(user_id)
+
     try:
         amount = float(message.text)
-        
+    except ValueError:
+        await message.answer("❌ Введите число")
+        return
+
+    # ── ПОПОЛНЕНИЕ ──────────────────────────────────────────────────────────
+    if action == "deposit":
         if amount < MIN_DEPOSIT:
             await message.answer(
                 f"❌ Минимальная сумма {MIN_DEPOSIT} USDT",
@@ -402,10 +420,9 @@ async def deposit_amount(message: Message):
                 ]])
             )
             return
-        
-        # Создаем счет в Cryptobot
+
         invoice = await crypto_api.create_invoice(amount)
-        
+
         if not invoice or 'pay_url' not in invoice:
             await message.answer(
                 "❌ Ошибка создания счета. Попробуйте позже.",
@@ -414,16 +431,14 @@ async def deposit_amount(message: Message):
                 ]])
             )
             return
-        
-        # Сохраняем счет
+
         invoice_id = storage.create_invoice(
-            message.from_user.id,
+            user_id,
             amount,
             invoice['invoice_id'],
             invoice['pay_url']
         )
-        
-        # Отправляем сообщение с кнопкой оплаты
+
         sent_msg = await message.answer(
             f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji>Счет Создан!</b>\n\n"
             f"<blockquote><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: <b><code>{amount}</code></b>\n"
@@ -431,38 +446,24 @@ async def deposit_amount(message: Message):
             f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату!",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="💳 Оплатить", 
-                    url=invoice['pay_url']
-                )],
-                [InlineKeyboardButton(
-                    text="◀️ Отмена", 
-                    callback_data="profile"
-                )]
+                [InlineKeyboardButton(text="💳 Оплатить", url=invoice['pay_url'])],
+                [InlineKeyboardButton(text="◀️ Отмена", callback_data="profile")]
             ])
         )
-        
-        # Сохраняем информацию о сообщении
+
         storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
-        
-        # Запускаем автоматическую проверку
+
         if invoice_id not in storage.check_tasks:
             task = asyncio.create_task(check_payment_task(invoice_id))
             storage.check_tasks[invoice_id] = task
-        
-    except ValueError:
-        await message.answer("❌ Введите число")
 
-# ========== ВЫВОД ==========
-@payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
-async def withdraw_amount(message: Message):
-    """Обработка суммы вывода"""
-    try:
-        amount = float(message.text)
-        user_id = message.from_user.id
+        # Сбрасываем состояние после создания счёта
+        payments_user_state.pop(user_id, None)
+
+    # ── ВЫВОД ────────────────────────────────────────────────────────────────
+    elif action == "withdraw":
         balance = storage.get_balance(user_id)
-        
-        # Проверки
+
         if amount < MIN_WITHDRAWAL:
             await message.answer(
                 f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT",
@@ -471,7 +472,7 @@ async def withdraw_amount(message: Message):
                 ]])
             )
             return
-        
+
         if amount > balance:
             await message.answer(
                 f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT",
@@ -480,8 +481,7 @@ async def withdraw_amount(message: Message):
                 ]])
             )
             return
-        
-        # Проверяем задержку
+
         can_withdraw, wait_time = storage.can_withdraw(user_id)
         if not can_withdraw:
             minutes = wait_time // 60
@@ -493,10 +493,9 @@ async def withdraw_amount(message: Message):
                 ]])
             )
             return
-        
-        # Создаем чек в Cryptobot
+
         check = await crypto_api.create_check(amount, user_id)
-        
+
         if not check or 'check_url' not in check:
             await message.answer(
                 "❌ Ошибка создания чека. Попробуйте позже.",
@@ -505,26 +504,11 @@ async def withdraw_amount(message: Message):
                 ]])
             )
             return
-        
-        # Сохраняем чек в локальное хранилище
+
         storage.add_withdrawal_check(user_id, amount, check)
-        
-        # Списываем баланс
         storage.deduct_balance(user_id, amount)
         storage.set_last_withdrawal(user_id)
-        
-        # Отправляем чек
-        buttons = [
-            [InlineKeyboardButton(
-                text="💸 Активировать чек в @CryptoBot", 
-                url=check['check_url']
-            )],
-            [InlineKeyboardButton(
-                text="◀️ В профиль", 
-                callback_data="profile"
-            )]
-        ]
-        
+
         await message.answer(
             f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Чек создан!</b>\n\n"
             f"Сумма: <b>{amount} USDT</b>\n"
@@ -532,11 +516,18 @@ async def withdraw_amount(message: Message):
             f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot\n\n"
             f"🔗 Ссылка на чек: <code>{check['check_url']}</code>",
             parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💸 Активировать чек в @CryptoBot", url=check['check_url'])],
+                [InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")]
+            ])
         )
-        
-    except ValueError:
-        await message.answer("❌ Введите число")
+
+        # Сбрасываем состояние после создания чека
+        payments_user_state.pop(user_id, None)
+
+    # ── Состояние не установлено — игнорируем ────────────────────────────────
+    else:
+        pass  # Число введено без контекста — молча игнорируем
 
 # Функция для установки bot из main.py
 def setup_payments(bot_instance: Bot):
