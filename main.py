@@ -17,7 +17,8 @@ from payments import payment_router, setup_payments, storage, MIN_DEPOSIT, MIN_W
 from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, 
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, 
-    cancel_bet, is_bet_command, handle_text_bet_command, process_bet_amount
+    cancel_bet, is_bet_command, handle_text_bet_command, process_bet_amount,
+    BetStates
 )
 
 # Настройки
@@ -411,14 +412,23 @@ async def about_callback(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+# FSM: ввод суммы ставки (должен быть ВЫШЕ общего F.text)
+@router.message(BetStates.waiting_for_amount)
+async def handle_bet_amount(message: Message, state: FSMContext):
+    """Обработка суммы ставки когда FSM в нужном состоянии"""
+    await process_bet_amount(message, state, betting_game)
+
 # ВАЖНО: Убираем обработчик всех текстовых сообщений и оставляем только обработку команд ставок
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     """Обработка только команд ставок, всё остальное игнорируем"""
+    # Пропускаем команды — они должны быть обработаны своими хендлерами
+    if message.text and message.text.startswith('/'):
+        return
     # Проверяем, является ли это командой ставки
     if is_bet_command(message.text):
         await handle_text_bet_command(message, betting_game)
-    # Всё остальное игнорируем - числа будут обработаны в payments.py
+    # Всё остальное игнорируем — числа будут обработаны в payments.py
 
 # Основная функция
 async def main():
