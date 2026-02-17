@@ -380,7 +380,7 @@ async def _process_withdraw(message: Message, user_id: int):
 
         check = await crypto_api.create_check(amount, user_id)
 
-        if not check or 'check_url' not in check:
+        if not check or 'bot_check_url' not in check:
             await message.answer(
                 "❌ Ошибка создания чека. Попробуйте позже.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
@@ -401,7 +401,7 @@ async def _process_withdraw(message: Message, user_id: int):
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💸 Получить чек", url=check['check_url'])],
+                [InlineKeyboardButton(text="💸 Получить чек", url=check['bot_check_url'])],
                 [InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")]
             ])
         )
