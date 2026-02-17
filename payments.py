@@ -238,7 +238,7 @@ async def check_payment_task(invoice_id: str):
                     try:
                         await bot.edit_message_text(
                             text=(
-                                f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Оплата получена!</b>\n\n"
+                                f"✅ <b>Оплата получена!</b>\n\n"
                                 f"Сумма <b>{invoice['amount']} USDT</b> зачислена на ваш баланс.\n"
                                 f"Текущий баланс: <b>{storage.get_balance(invoice['user_id']):.2f} USDT</b>"
                             ),
