@@ -202,13 +202,13 @@ class CryptoBotAPI:
             return None
     
     async def get_checks(self) -> Optional[List[dict]]:
-        """Получает список всех чеков из Cryptobot"""
+        """Получает список активных чеков из Cryptobot"""
         async with aiohttp.ClientSession() as session:
             try:
                 resp = await session.post(
                     f"{CRYPTOBOT_API_URL}/getChecks",
                     headers=self.headers,
-                    json={"status": "active"}  # Можно изменить на нужный статус
+                    json={"status": "active"}
                 )
                 if resp.status == 200:
                     data = await resp.json()
@@ -217,6 +217,41 @@ class CryptoBotAPI:
             except Exception as e:
                 logging.error(f"Ошибка получения чеков: {e}")
             return None
+
+    async def get_all_checks_any_status(self) -> Optional[List[dict]]:
+        """Получает ВСЕ чеки из Cryptobot без фильтра статуса (включая hold, activated и т.д.)"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/getChecks",
+                    headers=self.headers,
+                    json={}
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get('ok'):
+                        return data.get('result', {}).get('items', [])
+                    else:
+                        logging.error(f"CryptoBot API error: {data}")
+            except Exception as e:
+                logging.error(f"Ошибка получения всех чеков: {e}")
+            return None
+
+    async def delete_check(self, check_id: int) -> bool:
+        """Удаляет чек (освобождает средства обратно на баланс CryptoBot)"""
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.post(
+                    f"{CRYPTOBOT_API_URL}/deleteCheck",
+                    headers=self.headers,
+                    json={"check_id": check_id}
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('ok', False)
+            except Exception as e:
+                logging.error(f"Ошибка удаления чека: {e}")
+            return False
 
 # Инициализация API
 crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
@@ -394,6 +429,132 @@ async def admin_refresh_checks(callback: CallbackQuery):
     await callback.message.delete()
     # Вызываем логику напрямую, используя from_user из callback (не из message)
     await _send_checks_to(callback.from_user.id, callback.message.chat.id)
+
+# ========== КОМАНДЫ ВОССТАНОВЛЕНИЯ ЧЕКОВ ==========
+
+@payment_router.message(Command("mycheks"))
+async def my_checks_command(message: Message):
+    """
+    Показывает ВСЕ чеки привязанные к Telegram ID пользователя — включая hold.
+    Доступна любому пользователю для себя, или админу для всех.
+    """
+    user_id = message.from_user.id
+    is_admin = (user_id == ADMIN_ID)
+
+    await message.answer("🔍 Ищу ваши чеки в CryptoBot...")
+
+    all_checks = await crypto_api.get_all_checks_any_status()
+
+    if all_checks is None:
+        await message.answer(
+            "❌ <b>Не удалось получить данные из CryptoBot.</b>\n\n"
+            "Проверьте, что API-ключ верный и бот имеет доступ к API.",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # Фильтруем чеки по pin_to_user_id
+    my_checks = [
+        c for c in all_checks
+        if str(c.get('pin_to_user_id', '')) == str(user_id) or is_admin
+    ]
+
+    if not my_checks:
+        await message.answer(
+            f"📭 <b>Чеков не найдено.</b>\n\n"
+            f"Все чеки привязанные к вашему ID <code>{user_id}</code> не найдены.\n"
+            f"Возможно они уже активированы или срок истёк.",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # Разбиваем по статусам
+    status_emoji = {
+        'active': '✅',
+        'activated': '☑️',
+        'hold': '⏳',
+        'expired': '❌',
+        'cancelled': '🚫',
+    }
+
+    text = f"<b>🔑 Найдено чеков: {len(my_checks)}</b>\n\n"
+    keyboard_buttons = []
+
+    for i, check in enumerate(my_checks, 1):
+        check_id   = check.get('check_id', 'N/A')
+        amount     = check.get('amount', '0')
+        asset      = check.get('asset', 'USDT')
+        status     = check.get('status', 'unknown')
+        check_url  = check.get('check_url', '')
+        pin_uid    = check.get('pin_to_user_id', '—')
+        emoji      = status_emoji.get(status, '❓')
+
+        text += (
+            f"{i}. {emoji} <b>Чек #{check_id}</b>\n"
+            f"   💰 <b>{amount} {asset}</b>  |  Статус: <code>{status}</code>\n"
+        )
+        if is_admin:
+            text += f"   👤 Для: <code>{pin_uid}</code>\n"
+        if check_url:
+            text += f"   🔗 <code>{check_url}</code>\n"
+        text += "\n"
+
+        # Кнопки только для активируемых чеков
+        if status in ('active', 'hold') and check_url:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"💸 Активировать #{check_id} ({amount} {asset})",
+                    url=check_url
+                )
+            ])
+
+        # Кнопка удаления для hold-чеков (только для админа)
+        if is_admin and status == 'hold':
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"🗑 Удалить чек #{check_id} (вернуть средства)",
+                    callback_data=f"del_check_{check_id}"
+                )
+            ])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons) if keyboard_buttons else None
+    await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+
+
+@payment_router.callback_query(F.data.startswith("del_check_"))
+async def delete_check_callback(callback: CallbackQuery):
+    """Удаляет hold-чек и возвращает средства на баланс CryptoBot"""
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Нет доступа", show_alert=True)
+        return
+
+    try:
+        check_id = int(callback.data.split("del_check_")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Неверный ID чека", show_alert=True)
+        return
+
+    await callback.answer("⏳ Удаляю чек...")
+    success = await crypto_api.delete_check(check_id)
+
+    if success:
+        await callback.message.answer(
+            f"✅ <b>Чек #{check_id} удалён.</b>\n\n"
+            f"Средства возвращены на баланс CryptoBot.",
+            parse_mode=ParseMode.HTML
+        )
+        # Обновляем сообщение
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+    else:
+        await callback.message.answer(
+            f"❌ <b>Не удалось удалить чек #{check_id}.</b>\n\n"
+            f"Возможно он уже активирован или не существует.",
+            parse_mode=ParseMode.HTML
+        )
+
 
 # ========== ПОПОЛНЕНИЕ И ВЫВОД ==========
 # Единый хендлер для числовых сообщений — определяем действие по user_state
