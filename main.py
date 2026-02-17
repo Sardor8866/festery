@@ -12,14 +12,12 @@ from aiohttp import web
 
 # Импортируем модуль платежей
 from payments import payment_router, setup_payments, storage, MIN_DEPOSIT, MIN_WITHDRAWAL
-from payments import deposit_amount as process_deposit
-from payments import withdraw_amount as process_withdraw
 
 # Импортируем игровой модуль
 from game import (
     BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, 
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, 
-    cancel_bet, is_bet_command, handle_text_bet_command
+    cancel_bet, is_bet_command, handle_text_bet_command, process_bet_amount
 )
 
 # Настройки
@@ -351,83 +349,19 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-# Обработка текстовых сообщений (команды ставок и ввод суммы)
-@router.message(F.text)
-async def handle_text_message(message: Message, state: FSMContext):
-    """Обработка текстовых сообщений - команды ставок или ввод суммы"""
+# Кнопка "На главную"
+@router.callback_query(F.data == "back_to_main")
+async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id in user_state:
+        del user_state[callback.from_user.id]
+    await state.clear()
     
-    # Проверяем, является ли это командой ставки
-    if is_bet_command(message.text):
-        await handle_text_bet_command(message, betting_game)
-        return
-    
-    # Иначе проверяем, является ли это числом (сумма ставки или депозит/вывод)
-    try:
-        amount = float(message.text)
-        await handle_amount_input(message, state)
-    except ValueError:
-        # Неизвестная команда - игнорируем или отвечаем
-        pass
-
-# Обработка ввода суммы
-async def handle_amount_input(message: Message, state: FSMContext):
-    """Обрабатывает ввод суммы"""
-    user_id = message.from_user.id
-    current_state = await state.get_state()
-    
-    # Проверяем, не в процессе ли ставки
-    if current_state:
-        from game import process_bet_amount
-        await process_bet_amount(message, state, betting_game)
-        return
-    
-    state_type = user_state.get(user_id)
-    
-    if not state_type:
-        await message.answer(
-            "Сначала выберите действие в профиле",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="👤 В профиль", callback_data="profile")
-            ]])
-        )
-        return
-    
-    try:
-        amount = float(message.text)
-        
-        if state_type == "deposit":
-            if amount < MIN_DEPOSIT:
-                await message.answer(f"❌ Минимальная сумма {MIN_DEPOSIT} USDT", reply_markup=get_cancel_menu())
-                return
-            await process_deposit(message)
-            sync_balances(user_id)
-            
-        elif state_type == "withdraw":
-            balance = sync_balances(user_id)
-            
-            if amount < MIN_WITHDRAWAL:
-                await message.answer(f"❌ Минимальная сумма {MIN_WITHDRAWAL} USDT", reply_markup=get_cancel_menu())
-                return
-            
-            if amount > balance:
-                await message.answer(f"❌ Недостаточно средств. Баланс: {balance:.2f} USDT", reply_markup=get_cancel_menu())
-                return
-            
-            can_withdraw, wait_time = storage.can_withdraw(user_id)
-            if not can_withdraw:
-                minutes = wait_time // 60
-                seconds = wait_time % 60
-                await message.answer(f"⏳ Подождите {minutes} мин {seconds} сек", reply_markup=get_cancel_menu())
-                return
-            
-            await process_withdraw(message)
-            sync_balances(user_id)
-            
-        if user_id in user_state:
-            del user_state[user_id]
-            
-    except ValueError:
-        await message.answer("❌ Введите число")
+    await callback.message.edit_text(
+        get_main_menu_text(),
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_main_menu()
+    )
+    await callback.answer()
 
 # Партнёры
 @router.callback_query(F.data == "partners")
@@ -477,19 +411,14 @@ async def about_callback(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-# Кнопка "На главную"
-@router.callback_query(F.data == "back_to_main")
-async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id in user_state:
-        del user_state[callback.from_user.id]
-    await state.clear()
-    
-    await callback.message.edit_text(
-        get_main_menu_text(),
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_main_menu()
-    )
-    await callback.answer()
+# ВАЖНО: Убираем обработчик всех текстовых сообщений и оставляем только обработку команд ставок
+@router.message(F.text)
+async def handle_text_message(message: Message, state: FSMContext):
+    """Обработка только команд ставок, всё остальное игнорируем"""
+    # Проверяем, является ли это командой ставки
+    if is_bet_command(message.text):
+        await handle_text_bet_command(message, betting_game)
+    # Всё остальное игнорируем - числа будут обработаны в payments.py
 
 # Основная функция
 async def main():
