@@ -38,7 +38,6 @@ class Storage:
         self.users: Dict[int, dict] = {}
         self.invoices: Dict[str, dict] = {}
         self.check_tasks: Dict[str, asyncio.Task] = {}
-        # Ожидаемое действие пользователя: 'deposit' или 'withdraw'
         self.pending_action: Dict[int, str] = {}
 
     def set_pending(self, user_id: int, action: str):
@@ -115,6 +114,7 @@ class Storage:
         if invoice_id in self.invoices:
             self.invoices[invoice_id]['chat_id'] = chat_id
             self.invoices[invoice_id]['message_id'] = message_id
+            logging.info(f"[{invoice_id}] set_message_info: chat_id={chat_id}, message_id={message_id}")
 
 
 storage = Storage()
@@ -188,15 +188,24 @@ crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
 async def check_payment_task(invoice_id: str):
     """Проверяет оплату каждые 2 секунды, обновляет сообщение при оплате/истечении"""
     try:
-        await asyncio.sleep(2)  # Ждем пока set_message_info сохранится
+        # Ждём появления chat_id и message_id (до 10 секунд, по 1 сек)
+        for wait in range(10):
+            await asyncio.sleep(1)
+            invoice = storage.get_invoice(invoice_id)
+            if invoice and invoice.get('chat_id') and invoice.get('message_id'):
+                logging.info(f"[{invoice_id}] message_id получен за {wait+1} сек")
+                break
+        else:
+            logging.error(f"[{invoice_id}] chat_id/message_id не появились за 10 сек — продолжаем без обновления сообщения")
 
-        for attempt in range(149):
+        for attempt in range(150):
             invoice = storage.get_invoice(invoice_id)
             if not invoice:
                 return
 
             # Счет истек
             if datetime.now() > invoice['expires_at']:
+                logging.info(f"[{invoice_id}] Счет истек на попытке {attempt}")
                 if invoice.get('chat_id') and invoice.get('message_id'):
                     try:
                         await bot.edit_message_text(
@@ -212,16 +221,18 @@ async def check_payment_task(invoice_id: str):
                             ]])
                         )
                     except Exception as e:
-                        logging.error(f"Ошибка редактирования (expired): {e}")
+                        logging.error(f"[{invoice_id}] Ошибка edit (expired): {e}")
                 storage.update_invoice_status(invoice_id, 'expired')
                 return
 
             # Проверяем статус в Cryptobot
             status = await crypto_api.get_invoice_status(invoice['crypto_id'])
+            logging.info(f"[{invoice_id}] Попытка {attempt+1}: статус={status}, chat_id={invoice.get('chat_id')}, msg_id={invoice.get('message_id')}")
 
             if status == 'paid':
                 storage.add_balance(invoice['user_id'], invoice['amount'])
                 storage.update_invoice_status(invoice_id, 'paid')
+                logging.info(f"[{invoice_id}] ОПЛАЧЕН — начислено {invoice['amount']} USDT пользователю {invoice['user_id']}")
 
                 if invoice.get('chat_id') and invoice.get('message_id'):
                     try:
@@ -238,14 +249,17 @@ async def check_payment_task(invoice_id: str):
                                 InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
                             ]])
                         )
+                        logging.info(f"[{invoice_id}] Сообщение обновлено успешно")
                     except Exception as e:
-                        logging.error(f"Ошибка редактирования (paid): {e}")
+                        logging.error(f"[{invoice_id}] Ошибка edit (paid): {e}")
+                else:
+                    logging.error(f"[{invoice_id}] НЕТ chat_id/message_id — сообщение не обновлено!")
                 return
 
             await asyncio.sleep(2)
 
     except Exception as e:
-        logging.error(f"Ошибка в задаче проверки: {e}")
+        logging.error(f"Ошибка в задаче проверки [{invoice_id}]: {e}")
     finally:
         if invoice_id in storage.check_tasks:
             del storage.check_tasks[invoice_id]
@@ -264,7 +278,6 @@ async def handle_amount_input(message: Message):
     elif action == 'withdraw':
         storage.clear_pending(user_id)
         await _process_withdraw(message, user_id)
-    # Нет pending — не наш ввод, игнорируем
 
 
 # ========== ПОПОЛНЕНИЕ ==========
@@ -313,8 +326,10 @@ async def _process_deposit(message: Message, user_id: int):
             ])
         )
 
+        # Сохраняем СРАЗУ после отправки — до запуска задачи
         storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
 
+        # Запускаем фоновую проверку уже ПОСЛЕ set_message_info
         if invoice_id not in storage.check_tasks:
             task = asyncio.create_task(check_payment_task(invoice_id))
             storage.check_tasks[invoice_id] = task
