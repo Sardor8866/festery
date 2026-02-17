@@ -16,7 +16,11 @@ from payments import deposit_amount as process_deposit
 from payments import withdraw_amount as process_withdraw
 
 # Импортируем игровой модуль
-from game import BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, cancel_bet
+from game import (
+    BettingGame, show_dice_menu, show_basketball_menu, show_football_menu, 
+    show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount, 
+    cancel_bet, is_bet_command, handle_text_bet_command
+)
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -108,15 +112,15 @@ def get_main_menu():
 def get_games_menu():
     buttons = [
         [
-            InlineKeyboardButton(text="🎲 Кубик", callback_data=GAME_CALLBACKS['dice'], icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="🏀 Баскетбол", callback_data=GAME_CALLBACKS['basketball'], icon_custom_emoji_id=EMOJI_BASKETBALL)
+            InlineKeyboardButton(text="🎲 Кубик", callback_data=GAME_CALLBACKS['dice']),
+            InlineKeyboardButton(text="🏀 Баскетбол", callback_data=GAME_CALLBACKS['basketball'])
         ],
         [
-            InlineKeyboardButton(text="⚽ Футбол", callback_data=GAME_CALLBACKS['football'], icon_custom_emoji_id=EMOJI_FOOTBALL),
-            InlineKeyboardButton(text="🎯 Дартс", callback_data=GAME_CALLBACKS['darts'], icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="⚽️ Футбол", callback_data=GAME_CALLBACKS['football']),
+            InlineKeyboardButton(text="🎯 Дартс", callback_data=GAME_CALLBACKS['darts'])
         ],
         [
-            InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'], icon_custom_emoji_id=EMOJI_BOWLING)
+            InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
         ],
         [
             InlineKeyboardButton(text="◀️ Назад", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
@@ -140,7 +144,7 @@ def get_profile_menu():
 # Клавиатура для отмены
 def get_cancel_menu():
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="◀️ Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
+        InlineKeyboardButton(text="Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
     ]])
 
 # Текст главного меню
@@ -161,12 +165,12 @@ def get_games_menu_text(user_id: int):
     return f"""
 <blockquote><tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> <b>Игры</b></blockquote>
 
-<blockquote>
-💰 Баланс: <code>{balance:.2f} USDT</code>
-🎲 Мин. ставка: <code>0.1 USDT</code>
-</blockquote>
 
-<b>Выберите игру:</b>
+<blockquote><tg-emoji emoji-id="5278467510604160626">🎮</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id="5197434882321567830">🎮</tg-emoji></blockquote>
+
+<blockquote><b>Выберите игру:</b></blockquote>
+
+<tg-emoji emoji-id="5907025791006283345">💬</tg-emoji> <b><a href="https://t.me/your_support">Тех. поддержка</a> | <a href="https://t.me/your_chat">Наш чат</a> | <a href="https://t.me/your_news">Новости</a></b>
 """
 
 # Профиль с реальным балансом из storage
@@ -190,9 +194,9 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 <blockquote><b><tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> Профиль</b></blockquote>
 
 <blockquote>
-<b><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji> <code>{balance:,.2f}</code> USDT</b>
-<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code></b>
-<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code></b>
+<b><tg-emoji emoji-id="5278467510604160626">💰</tg-emoji>:<code>{balance:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
+<tg-emoji emoji-id="5443127283898405358">📥</tg-emoji> Депозитов: <b><code>{total_deposits:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
+<tg-emoji emoji-id="5445355530111437729">📤</tg-emoji> Выводов: <b><code>{total_withdrawals:,.2f}</code><tg-emoji emoji-id="5197434882321567830">💰</tg-emoji></b>
 <tg-emoji emoji-id="5274055917766202507">📅</tg-emoji> В проекте: <b><code>{days_in_project} {days_text}</code></b>
 </blockquote>
 
@@ -310,7 +314,7 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<blockquote><i>Введите сумму пополнения (мин. {MIN_DEPOSIT} USDT):</i></blockquote>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму пополнения:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -341,15 +345,31 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<blockquote><i>Введите сумму вывода (мин. {MIN_WITHDRAWAL} USDT):</i></blockquote>"
-        f"Доступно: <code>{balance:.2f} USDT</code>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму вывода:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
     await callback.answer()
 
+# Обработка текстовых сообщений (команды ставок и ввод суммы)
+@router.message(F.text)
+async def handle_text_message(message: Message, state: FSMContext):
+    """Обработка текстовых сообщений - команды ставок или ввод суммы"""
+    
+    # Проверяем, является ли это командой ставки
+    if is_bet_command(message.text):
+        await handle_text_bet_command(message, betting_game)
+        return
+    
+    # Иначе проверяем, является ли это числом (сумма ставки или депозит/вывод)
+    try:
+        amount = float(message.text)
+        await handle_amount_input(message, state)
+    except ValueError:
+        # Неизвестная команда - игнорируем или отвечаем
+        pass
+
 # Обработка ввода суммы
-@router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message, state: FSMContext):
     """Обрабатывает ввод суммы"""
     user_id = message.from_user.id
