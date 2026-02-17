@@ -295,34 +295,86 @@ async def admin_checks(message: Message):
     text += f"<b>Локальные чеки ({len(local_checks)}):</b>\n"
     if local_checks:
         for i, check in enumerate(local_checks[-10:], 1):  # Показываем последние 10
+            check_url = check['check_url']
+            check_id = check['check_id']
+            
             text += (
-                f"{i}. <a href='{check['check_url']}'>Чек #{check['check_id']}</a>\n"
-                f"   👤 User: {check['user_id']}\n"
-                f"   💰 Сумма: {check['amount']} USDT\n"
-                f"   ⏰ {check['created_at'].strftime('%d.%m %H:%M')}\n\n"
+                f"{i}. <a href='{check_url}'>🔗 Чек #{check_id}</a>\n"
+                f"   👤 User: <code>{check['user_id']}</code>\n"
+                f"   💰 Сумма: <b>{check['amount']} USDT</b>\n"
+                f"   ⏰ {check['created_at'].strftime('%d.%m %H:%M')}\n"
+                f"   🔗 Ссылка: <code>{check_url}</code>\n\n"
             )
     else:
-        text += "Нет локальных чеков\n\n"
+        text += "❌ Нет локальных чеков\n\n"
     
     # Чеки из API
     text += f"<b>Чеки из API Cryptobot ({len(api_checks) if api_checks else 0}):</b>\n"
     if api_checks:
         for i, check in enumerate(api_checks[:10], 1):  # Показываем первые 10
+            check_url = check.get('check_url', '#')
+            check_id = check.get('check_id', 'N/A')
+            amount = check.get('amount', '0')
+            asset = check.get('asset', 'USDT')
+            user_id = check.get('user_id', 'Не указан')
+            status = check.get('status', 'unknown')
+            
+            # Определяем эмодзи статуса
+            status_emoji = "✅" if status == 'active' else "⏳" if status == 'pending' else "❌"
+            
             text += (
-                f"{i}. <a href='{check.get('check_url')}'>Чек #{check.get('check_id')}</a>\n"
-                f"   💰 Сумма: {check.get('amount')} {check.get('asset')}\n"
-                f"   👤 Для: {check.get('user_id')}\n"
-                f"   📊 Статус: {check.get('status')}\n\n"
+                f"{i}. <a href='{check_url}'>🔗 Чек #{check_id}</a>\n"
+                f"   💰 Сумма: <b>{amount} {asset}</b>\n"
+                f"   👤 Для: <code>{user_id}</code>\n"
+                f"   📊 Статус: {status_emoji} {status}\n"
+                f"   🔗 Ссылка: <code>{check_url}</code>\n\n"
             )
     else:
-        text += "Нет чеков в API"
+        text += "❌ Нет чеков в API"
     
-    # Кнопка для обновления
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_refresh_checks")
-    ]])
+    # Создаем клавиатуру с кнопками для каждого активного чека
+    keyboard_buttons = []
     
-    await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
+    # Добавляем кнопки для локальных чеков
+    if local_checks:
+        for check in local_checks[-5:]:  # Показываем последние 5 чеков
+            check_url = check['check_url']
+            check_id = check['check_id']
+            amount = check['amount']
+            
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"💰 Активировать чек {amount} USDT",
+                    url=check_url
+                )
+            ])
+    
+    # Добавляем кнопки для API чеков
+    if api_checks:
+        for check in api_checks[:5]:  # Показываем первые 5 чеков
+            check_url = check.get('check_url')
+            if check_url and check.get('status') == 'active':
+                amount = check.get('amount', '0')
+                keyboard_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"🔄 Активировать чек {amount} {check.get('asset', 'USDT')}",
+                        url=check_url
+                    )
+                ])
+    
+    # Добавляем кнопку обновления
+    keyboard_buttons.append([
+        InlineKeyboardButton(text="🔄 Обновить список", callback_data="admin_refresh_checks")
+    ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    
+    await message.answer(
+        text, 
+        parse_mode=ParseMode.HTML, 
+        reply_markup=keyboard,
+        disable_web_page_preview=False  # Разрешаем предпросмотр ссылок
+    )
 
 @payment_router.callback_query(F.data == "admin_refresh_checks")
 async def admin_refresh_checks(callback: CallbackQuery):
@@ -339,9 +391,6 @@ async def admin_refresh_checks(callback: CallbackQuery):
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def deposit_amount(message: Message):
     """Обработка введенной суммы для пополнения"""
-    # Проверяем, что это пополнение (в реальном проекте используйте FSM)
-    # Для простоты будем считать, что если пользователь ввел число и не в процессе вывода - это пополнение
-    
     try:
         amount = float(message.text)
         
@@ -383,14 +432,12 @@ async def deposit_amount(message: Message):
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="Оплатить", 
-                    url=invoice['pay_url'],
-                    icon_custom_emoji_id=EMOJI_LINK  
+                    text="💳 Оплатить", 
+                    url=invoice['pay_url']
                 )],
                 [InlineKeyboardButton(
-                    text="Отмена", 
-                    callback_data="profile",
-                    icon_custom_emoji_id=EMOJI_BACK
+                    text="◀️ Отмена", 
+                    callback_data="profile"
                 )]
             ])
         )
@@ -468,15 +515,22 @@ async def withdraw_amount(message: Message):
         
         # Отправляем чек
         buttons = [
-            [InlineKeyboardButton(text="💸 Получить чек", url=check['check_url'])],
-            [InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")]
+            [InlineKeyboardButton(
+                text="💸 Активировать чек в @CryptoBot", 
+                url=check['check_url']
+            )],
+            [InlineKeyboardButton(
+                text="◀️ В профиль", 
+                callback_data="profile"
+            )]
         ]
         
         await message.answer(
             f"<tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji> <b>Чек создан!</b>\n\n"
             f"Сумма: <b>{amount} USDT</b>\n"
             f"Новый баланс: <b>{storage.get_balance(user_id):.2f} USDT</b>\n\n"
-            f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot",
+            f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot\n\n"
+            f"🔗 Ссылка на чек: <code>{check['check_url']}</code>",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
