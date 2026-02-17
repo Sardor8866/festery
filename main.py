@@ -11,7 +11,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 
 # Импортируем модуль платежей
-from payments import payment_router, setup_payments, storage, MIN_DEPOSIT, MIN_WITHDRAWAL
+from payments import payment_router, setup_payments, storage, MIN_DEPOSIT, MIN_WITHDRAWAL, payments_user_state
 
 # Импортируем игровой модуль
 from game import (
@@ -67,8 +67,8 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 # Роутер
 router = Router()
 
-# Хранилище состояний пользователя
-user_state = {}
+# Хранилище состояний пользователя (общее с payments.py)
+user_state = payments_user_state
 
 # Создаем экземпляр игры
 betting_game = None
