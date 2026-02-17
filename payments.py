@@ -386,4 +386,4 @@ async def withdraw_amount(message: Message):
 # Функция для установки bot из main.py
 def setup_payments(bot_instance: Bot):
     global bot
-    bot = bot_instance сделай в коде команду для админа /cheks тас должно быть все чеки и ссылка наних которые созданны через айпи токен
+    bot = bot_instance
