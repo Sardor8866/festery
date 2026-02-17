@@ -323,21 +323,25 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
 # ========== ТЕКСТОВЫЕ СООБЩЕНИЯ (ставки) ==========
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
-    """Обработка текста — команды ставок или ввод суммы для ставки"""
+    """Обработка текста — команды ставок или ввод суммы"""
+    from payments import handle_amount_input
 
     # Команды ставок (не числа)
     if is_bet_command(message.text):
         await handle_text_bet_command(message, betting_game)
         return
 
-    # Числовой ввод — проверяем, не в процессе ли ставки
+    # Числовой ввод
     try:
         float(message.text)
         current_state = await state.get_state()
         if current_state:
+            # В процессе ставки — передаём в игру
             from game import process_bet_amount
             await process_bet_amount(message, state, betting_game)
-        # Если нет FSM-состояния — числом займётся payment_router (он идет вторым)
+        else:
+            # Нет FSM — передаём в payments (депозит/вывод)
+            await handle_amount_input(message)
     except ValueError:
         pass  # Неизвестный текст — игнорируем
 
