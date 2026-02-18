@@ -124,18 +124,19 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             is_real_mine = idx in real_positions
 
             if is_open:
-                # Клетка уже была открыта игроком
-                if is_mine:
-                    text = CELL_EXPLODE  # взорванная мина
+                if is_mine and is_real_mine:
+                    # Игрок нажал на реальную мину — взрыв
+                    text = CELL_EXPLODE
                 else:
-                    text = CELL_GEM      # открытый гем
+                    # Открытый гем ИЛИ скрытая мина (показываем как алмаз)
+                    text = CELL_GEM
                 cb = "mines_noop"
             elif game_over and is_real_mine:
-                # После проигрыша — показываем только реальные мины
+                # После проигрыша — только реальные мины показываем как мины
                 text = CELL_MINE
                 cb   = "mines_noop"
             elif game_over:
-                # После проигрыша — все остальные (безопасные + скрытые) = алмазы
+                # Скрытые мины и безопасные клетки — алмазы
                 text = CELL_GEM
                 cb   = "mines_noop"
             else:
@@ -361,8 +362,20 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
     if session['board'][idx]:
         # МИНА
-        mines_count = session['mines_count']
-        bet         = session['bet']
+        mines_count    = session['mines_count']
+        bet            = session['bet']
+        real_positions = session.get('real_positions', set())
+
+        # Если нажал на СКРЫТУЮ мину — убираем одну реальную из показа
+        # чтобы на экране всегда было ровно mines_count мин
+        if idx not in real_positions:
+            # Скрытая мина — добавляем idx в real_positions вместо одной реальной
+            # Убираем случайную реальную мину (она станет алмазом)
+            if real_positions:
+                remove_one = random.choice(list(real_positions))
+                real_positions = (real_positions - {remove_one}) | {idx}
+                session['real_positions'] = real_positions
+
         _sessions.pop(user_id, None)
         await state.clear()
 
