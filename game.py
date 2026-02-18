@@ -44,6 +44,9 @@ EMOJI_LESS = "5447183459602669338"
 EMOJI_2MORE = "5429651785352501917"
 EMOJI_2LESS = "5429518319243775957"
 EMOJI_NUMBER = "5456140674028019486"
+EMOJI_GOAL = "5206607081334906820"
+EMOJI_3POINT = "5397782960512444700"
+EMOJI_MISS = "5210952531676504517"
 
 # Конфигурации для ставок
 DICE_BET_TYPES = {
@@ -558,8 +561,8 @@ async def show_exact_number_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback,
-        f"<b>🎯 Точное число</b>\n\n"
-        f"<i>Выберите число от 1 до 6:</i>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5456140674028019486\">🎰</tg-emoji> Точное число</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите число:</i></b></blockquote>",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -569,11 +572,11 @@ async def show_basketball_menu(callback: CallbackQuery):
     """Показать меню баскетбола - НОВОЕ РАСПОЛОЖЕНИЕ"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="3-очковый (x2.75)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_BASKETBALL)
+            InlineKeyboardButton(text="3-очковый (x2.75)", callback_data="bet_basketball_баскет_3очка", icon_custom_emoji_id=EMOJI_3POINT)
         ],
         [
-            InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол", icon_custom_emoji_id=EMOJI_BASKETBALL),
-            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо", icon_custom_emoji_id=EMOJI_BASKETBALL)
+            InlineKeyboardButton(text="Гол (x1.85)", callback_data="bet_basketball_баскет_гол", icon_custom_emoji_id=EMOJI_GOAL),
+            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_basketball_баскет_мимо", icon_custom_emoji_id=EMOJI_MISS)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
@@ -581,12 +584,8 @@ async def show_basketball_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback,
-        f"<b>🏀 Баскетбол</b>\n\n"
-        f"<i>Выберите тип ставки:</i>\n\n"
-        f"<blockquote>💡 <b>Команды:</b>\n"
-        f"<code>баскет гол 10</code>\n"
-        f"<code>баскет 3очка 20</code>\n"
-        f"<code>basket miss 15</code></blockquote>",
+        f"<blockquote><b>🏀 Баскетбол</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -596,8 +595,8 @@ async def show_football_menu(callback: CallbackQuery):
     """Показать меню футбола - НОВОЕ РАСПОЛОЖЕНИЕ"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Гол (x1.3)", callback_data="bet_football_футбол_гол", icon_custom_emoji_id=EMOJI_FOOTBALL),
-            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_FOOTBALL)
+            InlineKeyboardButton(text="Гол (x1.3)", callback_data="bet_football_футбол_гол", icon_custom_emoji_id=EMOJI_GOAL),
+            InlineKeyboardButton(text="Мимо (x1.7)", callback_data="bet_football_футбол_мимо", icon_custom_emoji_id=EMOJI_MISS)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
@@ -605,12 +604,8 @@ async def show_football_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback,
-        f"<b>⚽ Футбол</b>\n\n"
-        f"<i>Выберите тип ставки:</i>\n\n"
-        f"<blockquote>💡 <b>Команды:</b>\n"
-        f"<code>фут гол 5</code>\n"
-        f"<code>фут мимо 10</code>\n"
-        f"<code>foot goal 15</code></blockquote>",
+        f"<blockquote><b>⚽ Футбол</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup,
         parse_mode='HTML'
     )
