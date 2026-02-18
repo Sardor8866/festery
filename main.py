@@ -117,7 +117,7 @@ def get_games_menu():
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
         ],
         [
-            InlineKeyboardButton(text="Мины", callback_data="mines_menu", icon_custom_emoji_id=EMOJI_MINES)
+            InlineKeyboardButton(text="💣 Мины", callback_data="mines_menu")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
