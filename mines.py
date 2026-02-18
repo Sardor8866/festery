@@ -377,7 +377,7 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
             f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
             f"</blockquote>",
-            f"<blockquote><b><i>Вы проиграли ставку! это не повод сдаваться!</i></b></blockquote>"
+            f"<blockquote><b><i>Вы проиграли ставку! это не повод сдаваться!</i></b></blockquote>",
             parse_mode=ParseMode.HTML,
             reply_markup=build_game_keyboard(session, game_over=True)
         )
