@@ -229,7 +229,8 @@ async def games_callback(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         get_games_menu_text(callback.from_user.id),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_games_menu()
+        reply_markup=get_games_menu(),
+        disable_web_page_preview=True
     )
     await callback.answer()
 
