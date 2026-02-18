@@ -6,82 +6,95 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# ========== КОНСТАНТЫ ЭМОДЗИ ==========
-EMOJI_MINE        = "5307996024738395492"   # 💣 мина
-EMOJI_GEM         = "5368324170671202286"   # 💎 гем (открытая безопасная клетка)
-EMOJI_CELL        = "5424972470023104089"   # 🟦 закрытая клетка
-EMOJI_BOMB_EXP    = "5199885118214255386"   # 💥 взрыв
-EMOJI_WIN         = "5440539497383087970"   # 🏆 победа
-EMOJI_BACK        = "5906771962734057347"   # ◀️ назад
-EMOJI_CASHOUT     = "5443127283898405358"   # 💰 кэшаут
-EMOJI_BALANCE     = "5278467510604160626"   # 💵 баланс
-EMOJI_CURRENCY    = "5197434882321567830"   # монетка-валюта
-EMOJI_MINES_ICON  = "5307996024738395492"   # иконка мин для заголовка
-EMOJI_MULTIPLIER  = "5197288647275071607"   # множитель
-
-# ========== МНОЖИТЕЛИ ДЛЯ МИН ==========
-# mines_count -> multiplier_per_gem (применяется каждый раз при открытии gem)
-MINES_MULTIPLIERS = {
-    2:  1.09,
-    3:  1.15,
-    4:  1.22,
-    5:  1.30,
-    6:  1.40,
-    7:  1.52,
-    8:  1.67,
-    9:  1.85,
-    10: 2.08,
-    11: 2.38,
-    12: 2.78,
-    13: 3.33,
-    14: 4.17,
-    15: 5.56,
-    16: 8.33,
-    17: 12.5,
-    18: 16.7,
-    19: 25.0,
-    20: 33.3,
-    21: 50.0,
-    22: 75.0,
-    23: 100.0,
-    24: 200.0,
-}
+# ========== ЭМОДЗИ (только в тексте сообщений через tg-emoji) ==========
+EMOJI_MINE       = "5307996024738395492"
+EMOJI_GEM        = "5368324170671202286"
+EMOJI_CELL       = "5424972470023104089"
+EMOJI_BOMB_EXP   = "5199885118214255386"
+EMOJI_WIN        = "5440539497383087970"
+EMOJI_BACK       = "5906771962734057347"
+EMOJI_CASHOUT    = "5443127283898405358"
+EMOJI_BALANCE    = "5278467510604160626"
+EMOJI_CURRENCY   = "5197434882321567830"
+EMOJI_MULTIPLIER = "5197288647275071607"
 
 GRID_SIZE = 5  # 5x5 = 25 клеток
 
+# ========== МНОЖИТЕЛИ ==========
+# mines_count -> [mult_gem1, mult_gem2, ..., mult_gemN]
+# N = 25 - mines_count  (кол-во безопасных клеток)
+# Рассчитано по формуле честного казино с хаусэджем 3%
+MINES_MULTIPLIERS = {
+    2:  [1.05, 1.15, 1.26, 1.39, 1.53, 1.7, 1.9, 2.14, 2.42, 2.77, 3.2, 3.73, 4.41, 5.29, 6.47, 8.08, 10.39, 13.86, 19.4, 29.1, 48.5, 97.0, 291.0],
+    3:  [1.1, 1.26, 1.45, 1.68, 1.96, 2.3, 2.73, 3.28, 3.98, 4.9, 6.13, 7.8, 10.14, 13.52, 18.59, 26.56, 39.84, 63.74, 111.55, 223.1, 557.75, 2231.0],
+    4:  [1.15, 1.39, 1.68, 2.05, 2.53, 3.17, 4.01, 5.16, 6.74, 8.99, 12.26, 17.16, 24.79, 37.18, 58.43, 97.38, 175.29, 350.59, 818.03, 2454.1, 12270.5],
+    5:  [1.21, 1.53, 1.96, 2.53, 3.32, 4.43, 6.01, 8.33, 11.8, 17.16, 25.74, 40.04, 65.07, 111.55, 204.51, 409.02, 920.29, 2454.1, 8589.35, 51536.1],
+    6:  [1.28, 1.7, 2.3, 3.17, 4.43, 6.33, 9.25, 13.88, 21.45, 34.32, 57.21, 100.11, 185.92, 371.83, 818.03, 2045.08, 6135.25, 24541.0, 171787.0],
+    7:  [1.35, 1.9, 2.73, 4.01, 6.01, 9.25, 14.65, 23.98, 40.76, 72.46, 135.86, 271.72, 588.74, 1412.97, 3885.66, 12952.19, 58284.88, 466279.0],
+    8:  [1.43, 2.14, 3.28, 5.16, 8.33, 13.88, 23.98, 43.16, 81.52, 163.03, 349.36, 815.17, 2119.45, 6358.35, 23313.95, 116569.75, 1049127.75],
+    9:  [1.52, 2.42, 3.98, 6.74, 11.8, 21.45, 40.76, 81.52, 173.22, 395.94, 989.85, 2771.59, 9007.66, 36030.65, 198168.57, 1981685.75],
+    10: [1.62, 2.77, 4.9, 8.99, 17.16, 34.32, 72.46, 163.03, 395.94, 1055.84, 3167.53, 11086.35, 48040.87, 288245.2, 3170697.2],
+    11: [1.73, 3.2, 6.13, 12.26, 25.74, 57.21, 135.86, 349.36, 989.85, 3167.53, 11878.24, 55431.77, 360306.5, 4323678.0],
+    12: [1.87, 3.73, 7.8, 17.16, 40.04, 100.11, 271.72, 815.17, 2771.59, 11086.35, 55431.77, 388022.38, 5044291.0],
+    13: [2.02, 4.41, 10.14, 24.79, 65.07, 185.92, 588.74, 2119.45, 9007.66, 48040.87, 360306.5, 5044291.0],
+    14: [2.2, 5.29, 13.52, 37.18, 111.55, 371.83, 1412.97, 6358.35, 36030.65, 288245.2, 4323678.0],
+    15: [2.42, 6.47, 18.59, 58.43, 204.51, 818.03, 3885.66, 23313.95, 198168.57, 3170697.2],
+    16: [2.69, 8.08, 26.56, 97.38, 409.02, 2045.08, 12952.19, 116569.75, 1981685.75],
+    17: [3.03, 10.39, 39.84, 175.29, 920.29, 6135.25, 58284.88, 1049127.75],
+    18: [3.46, 13.86, 63.74, 350.59, 2454.1, 24541.0, 466279.0],
+    19: [4.04, 19.4, 111.55, 818.03, 8589.35, 171787.0],
+    20: [4.85, 29.1, 223.1, 2454.1, 51536.1],
+    21: [6.06, 48.5, 557.75, 12270.5],
+    22: [8.08, 97.0, 2231.0],
+    23: [12.12, 291.0],
+    24: [24.25],
+}
+
+
 # ========== FSM ==========
 class MinesGame(StatesGroup):
-    choosing_mines = State()
-    choosing_bet   = State()
-    playing        = State()
+    choosing_bet = State()
+    playing      = State()
+
 
 # ========== РОУТЕР ==========
 mines_router = Router()
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+# ========== СЕССИИ ==========
+_sessions: dict = {}
 
-def _te(emoji_id: str, fallback: str) -> str:
-    """Кастомный эмодзи тег"""
+
+# ========== ХЕЛПЕРЫ ==========
+
+def te(emoji_id: str, fallback: str) -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 
-def generate_board(mines_count: int) -> list[bool]:
-    """Возвращает список 25 bool: True = мина"""
-    board = [False] * GRID_SIZE * GRID_SIZE
-    mine_positions = random.sample(range(GRID_SIZE * GRID_SIZE), mines_count)
-    for pos in mine_positions:
+def get_multiplier(mines_count: int, gems_opened: int) -> float:
+    if gems_opened == 0:
+        return 1.0
+    mults = MINES_MULTIPLIERS.get(mines_count, [])
+    if not mults:
+        return 1.0
+    idx = min(gems_opened - 1, len(mults) - 1)
+    return mults[idx]
+
+
+def get_next_mult(mines_count: int, gems_opened: int) -> float:
+    mults = MINES_MULTIPLIERS.get(mines_count, [])
+    if not mults or gems_opened >= len(mults):
+        return get_multiplier(mines_count, gems_opened)
+    return mults[gems_opened]
+
+
+def generate_board(mines_count: int) -> list:
+    board = [False] * (GRID_SIZE * GRID_SIZE)
+    for pos in random.sample(range(GRID_SIZE * GRID_SIZE), mines_count):
         board[pos] = True
     return board
 
 
-def get_current_multiplier(mines_count: int, gems_opened: int) -> float:
-    """Текущий накопленный множитель"""
-    base = MINES_MULTIPLIERS.get(mines_count, 1.09)
-    return round(base ** gems_opened, 2) if gems_opened > 0 else 1.0
-
-
-def build_game_keyboard(session: dict, game_over: bool = False, won: bool = False) -> InlineKeyboardMarkup:
-    """Строит клавиатуру игрового поля 5x5"""
+def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboardMarkup:
     board    = session['board']
     revealed = session['revealed']
     rows = []
@@ -89,124 +102,94 @@ def build_game_keyboard(session: dict, game_over: bool = False, won: bool = Fals
     for row in range(GRID_SIZE):
         btn_row = []
         for col in range(GRID_SIZE):
-            idx = row * GRID_SIZE + col
-            is_mine   = board[idx]
-            is_open   = revealed[idx]
+            idx     = row * GRID_SIZE + col
+            is_mine = board[idx]
+            is_open = revealed[idx]
 
             if is_open:
-                if is_mine:
-                    # Взрыв
-                    text = _te(EMOJI_BOMB_EXP, "💥")
-                else:
-                    text = _te(EMOJI_GEM, "💎")
+                text = "💥" if is_mine else "💎"
             elif game_over and is_mine:
-                # Показываем все мины после проигрыша
-                text = _te(EMOJI_MINE, "💣")
+                text = "💣"
             else:
-                text = _te(EMOJI_CELL, "🟦")
+                text = "🟦"
 
-            if game_over or not is_open:
-                cb = f"mines_cell_{idx}" if not game_over else "mines_noop"
-            else:
-                cb = "mines_noop"
-
+            cb = "mines_noop" if (game_over or is_open) else f"mines_cell_{idx}"
             btn_row.append(InlineKeyboardButton(text=text, callback_data=cb))
         rows.append(btn_row)
 
-    # Кнопки управления
     if not game_over:
-        gems_opened = session.get('gems_opened', 0)
-        mult = get_current_multiplier(session['mines_count'], gems_opened)
-        bet  = session['bet']
-        cashout_amount = round(bet * mult, 2)
-
-        control_row = []
-        if gems_opened > 0:
-            control_row.append(
-                InlineKeyboardButton(
-                    text=f"{_te(EMOJI_CASHOUT, '💰')} Забрать {cashout_amount}",
-                    callback_data="mines_cashout"
-                )
-            )
-        control_row.append(
-            InlineKeyboardButton(
-                text=f"{_te(EMOJI_BACK, '◀️')} Выйти",
-                callback_data="mines_exit"
-            )
-        )
-        rows.append(control_row)
+        gems    = session.get('gems_opened', 0)
+        mult    = get_multiplier(session['mines_count'], gems)
+        cashout = round(session['bet'] * mult, 2)
+        ctrl = []
+        if gems > 0:
+            ctrl.append(InlineKeyboardButton(
+                text=f"💰 Забрать {cashout}",
+                callback_data="mines_cashout"
+            ))
+        ctrl.append(InlineKeyboardButton(text="◀️ Выйти", callback_data="mines_exit"))
+        rows.append(ctrl)
     else:
         rows.append([
-            InlineKeyboardButton(
-                text=f"{_te(EMOJI_MINES_ICON, '💣')} Играть снова",
-                callback_data="mines_play_again"
-            ),
-            InlineKeyboardButton(
-                text=f"{_te(EMOJI_BACK, '◀️')} Выйти",
-                callback_data="mines_exit"
-            )
+            InlineKeyboardButton(text="💣 Снова", callback_data="mines_play_again"),
+            InlineKeyboardButton(text="◀️ Выйти", callback_data="mines_exit"),
         ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_mines_select_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура выбора количества мин"""
     rows = []
-    options = list(range(2, 25))  # 2..24
-    row = []
+    row  = []
+    options = list(range(2, 25))
     for i, m in enumerate(options):
-        mult = MINES_MULTIPLIERS[m]
+        first = MINES_MULTIPLIERS[m][0]
         row.append(InlineKeyboardButton(
-            text=f"{_te(EMOJI_MINE, '💣')} {m}  ×{mult}",
+            text=f"💣{m}  x{first}",
             callback_data=f"mines_select_{m}"
         ))
         if len(row) == 4 or i == len(options) - 1:
             rows.append(row)
             row = []
-    rows.append([InlineKeyboardButton(
-        text=f"{_te(EMOJI_BACK, '◀️')} Назад",
-        callback_data="games"
-    )])
+    rows.append([InlineKeyboardButton(text="◀️ Игры", callback_data="games")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def game_status_text(session: dict) -> str:
-    mines  = session['mines_count']
-    bet    = session['bet']
-    gems   = session.get('gems_opened', 0)
-    mult   = get_current_multiplier(mines, gems)
-    profit = round(bet * mult, 2)
+def game_text(session: dict) -> str:
+    mines      = session['mines_count']
+    bet        = session['bet']
+    gems       = session.get('gems_opened', 0)
+    mult       = get_multiplier(mines, gems)
+    next_mult  = get_next_mult(mines, gems)
+    profit     = round(bet * mult, 2)
+    total_safe = GRID_SIZE * GRID_SIZE - mines
+    safe_left  = total_safe - gems
 
     return (
-        f"<blockquote>{_te(EMOJI_MINES_ICON, '💣')} <b>Мины</b></blockquote>\n\n"
+        f"<blockquote>{te(EMOJI_MINE,'💣')} <b>Мины</b> | Поле 5×5</blockquote>\n\n"
         f"<blockquote>"
-        f"{_te(EMOJI_BALANCE, '💵')} Ставка: <code>{bet}</code>{_te(EMOJI_CURRENCY, '🪙')}\n"
-        f"{_te(EMOJI_MINE, '💣')} Мин: <b>{mines}</b>\n"
-        f"{_te(EMOJI_GEM, '💎')} Открыто: <b>{gems}</b>\n"
-        f"{_te(EMOJI_MULTIPLIER, '⚡')} Множитель: <b>×{mult}</b>\n"
-        f"{_te(EMOJI_CASHOUT, '💰')} К выплате: <code>{profit}</code>{_te(EMOJI_CURRENCY, '🪙')}"
-        f"</blockquote>"
+        f"{te(EMOJI_BALANCE,'💵')} Ставка: <code>{bet}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
+        f"{te(EMOJI_MINE,'💣')} Мин: <b>{mines}</b>\n"
+        f"{te(EMOJI_GEM,'💎')} Открыто: <b>{gems}/{total_safe}</b>\n"
+        f"{te(EMOJI_MULTIPLIER,'⚡')} Текущий: <b>x{mult}</b>\n"
+        f"{te(EMOJI_MULTIPLIER,'⚡')} Следующий: <b>x{next_mult}</b>\n"
+        f"{te(EMOJI_CASHOUT,'💰')} К выплате: <code>{profit}</code> {te(EMOJI_CURRENCY,'🪙')}"
+        f"</blockquote>\n\n"
+        f"<i>Безопасных клеток осталось: {safe_left}</i>"
     )
 
 
-# ========== ХРАНИЛИЩЕ СЕССИЙ ==========
-# { user_id: { board, revealed, mines_count, bet, gems_opened } }
-_sessions: dict = {}
-
-# ========== ХЕНДЛЕРЫ ==========
+# ========== ПУБЛИЧНАЯ ФУНКЦИЯ ВХОДА ==========
 
 async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
-    """Показать меню Mines — вызывается из main.py"""
     user_id = callback.from_user.id
-
     balance = storage.get_balance(user_id)
     text = (
-        f"<blockquote>{_te(EMOJI_MINES_ICON, '💣')} <b>Игра Мины</b></blockquote>\n\n"
+        f"<blockquote>{te(EMOJI_MINE,'💣')} <b>Мины</b> — поле 5×5</blockquote>\n\n"
         f"<blockquote>"
-        f"{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{balance:.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}\n\n"
-        f"Выберите количество мин на поле 5×5.\n"
-        f"Каждая открытая безопасная клетка умножает ставку."
+        f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}\n\n"
+        f"Выберите количество мин.\n"
+        f"Рядом — множитель за первый безопасный гем."
         f"</blockquote>"
     )
     await callback.message.edit_text(
@@ -217,28 +200,31 @@ async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     await callback.answer()
 
 
+# ========== ХЕНДЛЕРЫ ==========
+
 @mines_router.callback_query(F.data.startswith("mines_select_"))
 async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
     mines_count = int(callback.data.split("_")[-1])
     await state.update_data(mines_count=mines_count)
     await state.set_state(MinesGame.choosing_bet)
 
-    mult = MINES_MULTIPLIERS[mines_count]
+    mults      = MINES_MULTIPLIERS[mines_count]
+    total_safe = GRID_SIZE * GRID_SIZE - mines_count
+
+    mult_lines = ""
+    for i, m in enumerate(mults):
+        mult_lines += f"  Гем {i+1}: <b>x{m}</b>\n"
+
     text = (
-        f"<blockquote>{_te(EMOJI_MINES_ICON, '💣')} <b>Мины: {mines_count}</b></blockquote>\n\n"
-        f"<blockquote>"
-        f"{_te(EMOJI_MULTIPLIER, '⚡')} Базовый множитель за гем: <b>×{mult}</b>\n\n"
+        f"<blockquote>{te(EMOJI_MINE,'💣')} Мин: <b>{mines_count}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
+        f"<blockquote><b>Множители:</b>\n{mult_lines}</blockquote>\n\n"
         f"Введите сумму ставки:"
-        f"</blockquote>"
     )
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text=f"{_te(EMOJI_BACK, '◀️')} Назад",
-                callback_data="mines_back_select"
-            )
+            InlineKeyboardButton(text="◀️ Назад", callback_data="mines_back_select")
         ]])
     )
     await callback.answer()
@@ -254,6 +240,7 @@ async def mines_back_select(callback: CallbackQuery, state: FSMContext):
 @mines_router.callback_query(F.data == "mines_play_again")
 async def mines_play_again(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
+    _sessions.pop(callback.from_user.id, None)
     await state.clear()
     await show_mines_menu(callback, pay_storage, None)
 
@@ -264,21 +251,14 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     _sessions.pop(user_id, None)
     await state.clear()
-
     balance = pay_storage.get_balance(user_id)
     await callback.message.edit_text(
-        f"<blockquote>{_te(EMOJI_BACK, '◀️')} Вы вышли из игры Мины</blockquote>\n\n"
-        f"<blockquote>{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{balance:.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}</blockquote>",
+        f"<blockquote>{te(EMOJI_BACK,'◀️')} Вы вышли из Мины</blockquote>\n\n"
+        f"<blockquote>{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}</blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"{_te(EMOJI_MINES_ICON, '💣')} Играть снова",
-                callback_data="mines_menu"
-            )],
-            [InlineKeyboardButton(
-                text=f"{_te(EMOJI_BACK, '◀️')} Игры",
-                callback_data="games"
-            )]
+            [InlineKeyboardButton(text="💣 Играть снова", callback_data="mines_menu")],
+            [InlineKeyboardButton(text="◀️ Игры",         callback_data="games")],
         ])
     )
     await callback.answer()
@@ -293,7 +273,7 @@ async def mines_noop(callback: CallbackQuery):
 async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
     user_id = callback.from_user.id
-    idx = int(callback.data.split("_")[-1])
+    idx     = int(callback.data.split("_")[-1])
 
     session = _sessions.get(user_id)
     if not session:
@@ -301,76 +281,69 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         return
 
     if session['revealed'][idx]:
-        await callback.answer("Клетка уже открыта!")
+        await callback.answer("Уже открыта!")
         return
 
     session['revealed'][idx] = True
 
     if session['board'][idx]:
-        # МИНА!
-        bet = session['bet']
+        # МИНА
         mines_count = session['mines_count']
-        # Списываем ставку (уже списана при старте)
+        bet         = session['bet']
         _sessions.pop(user_id, None)
         await state.clear()
 
+        balance = pay_storage.get_balance(user_id)
         text = (
-            f"<blockquote>{_te(EMOJI_BOMB_EXP, '💥')} <b>БУМ! Вы попали на мину!</b></blockquote>\n\n"
+            f"<blockquote>{te(EMOJI_BOMB_EXP,'💥')} <b>БУМ! Вы попали на мину!</b></blockquote>\n\n"
             f"<blockquote>"
-            f"{_te(EMOJI_MINE, '💣')} Мин было: <b>{mines_count}</b>\n"
-            f"{_te(EMOJI_BALANCE, '💵')} Проиграно: <code>{bet}</code>{_te(EMOJI_CURRENCY, '🪙')}\n"
-            f"{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{pay_storage.get_balance(user_id):.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}"
+            f"{te(EMOJI_MINE,'💣')} Мин: <b>{mines_count}</b>\n"
+            f"{te(EMOJI_BALANCE,'💵')} Проиграно: <code>{bet}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
+            f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
             f"</blockquote>"
         )
         await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=build_game_keyboard(
-                {**session, 'revealed': session['revealed']},
-                game_over=True, won=False
-            )
+            text, parse_mode=ParseMode.HTML,
+            reply_markup=build_game_keyboard(session, game_over=True)
         )
         await callback.answer("💥 Мина!")
-    else:
-        session['gems_opened'] += 1
-        gems = session['gems_opened']
-        mines_count = session['mines_count']
 
-        # Проверка победы (все гемы открыты)
-        total_gems = GRID_SIZE * GRID_SIZE - mines_count
-        if gems == total_gems:
-            mult = get_current_multiplier(mines_count, gems)
-            bet  = session['bet']
+    else:
+        # ГЕМ
+        session['gems_opened'] += 1
+        gems       = session['gems_opened']
+        mines_count = session['mines_count']
+        total_safe  = GRID_SIZE * GRID_SIZE - mines_count
+        mult        = get_multiplier(mines_count, gems)
+
+        if gems == total_safe:
+            # ПОБЕДА
+            bet      = session['bet']
             winnings = round(bet * mult, 2)
             pay_storage.update_balance(user_id, winnings)
             _sessions.pop(user_id, None)
             await state.clear()
 
+            balance = pay_storage.get_balance(user_id)
             text = (
-                f"<blockquote>{_te(EMOJI_WIN, '🏆')} <b>ПОБЕДА! Вы открыли все гемы!</b></blockquote>\n\n"
+                f"<blockquote>{te(EMOJI_WIN,'🏆')} <b>ПОБЕДА! Все гемы открыты!</b></blockquote>\n\n"
                 f"<blockquote>"
-                f"{_te(EMOJI_MULTIPLIER, '⚡')} Множитель: <b>×{mult}</b>\n"
-                f"{_te(EMOJI_CASHOUT, '💰')} Выигрыш: <code>{winnings}</code>{_te(EMOJI_CURRENCY, '🪙')}\n"
-                f"{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{pay_storage.get_balance(user_id):.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}"
+                f"{te(EMOJI_MULTIPLIER,'⚡')} Множитель: <b>x{mult}</b>\n"
+                f"{te(EMOJI_CASHOUT,'💰')} Выигрыш: <code>{winnings}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
+                f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
                 f"</blockquote>"
             )
             await callback.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=build_game_keyboard(
-                    {**session, 'revealed': session['revealed']},
-                    game_over=True, won=True
-                )
+                text, parse_mode=ParseMode.HTML,
+                reply_markup=build_game_keyboard(session, game_over=True)
             )
             await callback.answer(f"🏆 Победа! +{winnings}")
         else:
-            mult = get_current_multiplier(mines_count, gems)
             await callback.message.edit_text(
-                game_status_text(session),
-                parse_mode=ParseMode.HTML,
+                game_text(session), parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session)
             )
-            await callback.answer(f"💎 Гем! ×{mult}")
+            await callback.answer(f"💎 x{mult}")
 
 
 @mines_router.callback_query(F.data == "mines_cashout")
@@ -383,15 +356,15 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Игра не найдена.", show_alert=True)
         return
 
-    gems  = session.get('gems_opened', 0)
+    gems = session.get('gems_opened', 0)
     if gems == 0:
         await callback.answer("Сначала откройте хотя бы одну клетку!", show_alert=True)
         return
 
     mines_count = session['mines_count']
-    bet   = session['bet']
-    mult  = get_current_multiplier(mines_count, gems)
-    winnings = round(bet * mult, 2)
+    bet         = session['bet']
+    mult        = get_multiplier(mines_count, gems)
+    winnings    = round(bet * mult, 2)
 
     pay_storage.update_balance(user_id, winnings)
     _sessions.pop(user_id, None)
@@ -399,36 +372,29 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
 
     balance = pay_storage.get_balance(user_id)
     text = (
-        f"<blockquote>{_te(EMOJI_CASHOUT, '💰')} <b>Кэшаут!</b></blockquote>\n\n"
+        f"<blockquote>{te(EMOJI_CASHOUT,'💰')} <b>Кэшаут!</b></blockquote>\n\n"
         f"<blockquote>"
-        f"{_te(EMOJI_GEM, '💎')} Открыто гемов: <b>{gems}</b>\n"
-        f"{_te(EMOJI_MULTIPLIER, '⚡')} Множитель: <b>×{mult}</b>\n"
-        f"{_te(EMOJI_CASHOUT, '💰')} Выигрыш: <code>{winnings}</code>{_te(EMOJI_CURRENCY, '🪙')}\n"
-        f"{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{balance:.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}"
+        f"{te(EMOJI_GEM,'💎')} Гемов открыто: <b>{gems}</b>\n"
+        f"{te(EMOJI_MULTIPLIER,'⚡')} Множитель: <b>x{mult}</b>\n"
+        f"{te(EMOJI_CASHOUT,'💰')} Выигрыш: <code>{winnings}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
+        f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
         f"</blockquote>"
     )
     await callback.message.edit_text(
-        text,
-        parse_mode=ParseMode.HTML,
+        text, parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"{_te(EMOJI_MINES_ICON, '💣')} Играть снова",
-                callback_data="mines_menu"
-            )],
-            [InlineKeyboardButton(
-                text=f"{_te(EMOJI_BACK, '◀️')} Игры",
-                callback_data="games"
-            )]
+            [InlineKeyboardButton(text="💣 Играть снова", callback_data="mines_menu")],
+            [InlineKeyboardButton(text="◀️ Игры",         callback_data="games")],
         ])
     )
-    await callback.answer(f"💰 Выигрыш: {winnings}!")
+    await callback.answer(f"💰 +{winnings}!")
 
 
-# ========== ОБРАБОТКА ВВОДА СТАВКИ (текстовое сообщение) ==========
+# ========== ОБРАБОТКА СТАВКИ (вызов из main.py) ==========
+
 async def process_mines_bet(message: Message, state: FSMContext, storage):
-    """Вызывается из main.py при вводе суммы ставки в состоянии MinesGame.choosing_bet"""
-    user_id = message.from_user.id
-    data = await state.get_data()
+    user_id     = message.from_user.id
+    data        = await state.get_data()
     mines_count = data.get('mines_count')
 
     if mines_count is None:
@@ -441,27 +407,24 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         await message.answer("Введите корректную сумму ставки.")
         return
 
-    balance = storage.get_balance(user_id)
-
     if bet <= 0:
         await message.answer("Ставка должна быть больше 0.")
         return
+
+    balance = storage.get_balance(user_id)
     if bet > balance:
         await message.answer(
             f"Недостаточно средств.\n"
-            f"{_te(EMOJI_BALANCE, '💵')} Баланс: <code>{balance:.2f}</code>{_te(EMOJI_CURRENCY, '🪙')}",
+            f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}",
             parse_mode=ParseMode.HTML
         )
         return
 
-    # Списываем ставку
     storage.update_balance(user_id, -bet)
 
-    # Создаём сессию
-    board = generate_board(mines_count)
     session = {
-        'board':       board,
-        'revealed':    [False] * GRID_SIZE * GRID_SIZE,
+        'board':       generate_board(mines_count),
+        'revealed':    [False] * (GRID_SIZE * GRID_SIZE),
         'mines_count': mines_count,
         'bet':         bet,
         'gems_opened': 0,
@@ -470,7 +433,7 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
     await state.set_state(MinesGame.playing)
 
     await message.answer(
-        game_status_text(session),
+        game_text(session),
         parse_mode=ParseMode.HTML,
         reply_markup=build_game_keyboard(session)
     )
