@@ -261,11 +261,8 @@ async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
     for i, m in enumerate(mults):
         mult_lines += f"  Гем {i+1}: <b>x{m}</b>\n"
 
-    text = (
-        f"<blockquote>💣 Мин: <b>{mines_count}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
-        f"<blockquote><b>Множители по каждому гему:</b>\n{mult_lines}</blockquote>\n\n"
-        f"Введите сумму ставки:"
-    )
+    text = f"<blockquote<b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>"
+    
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
@@ -293,8 +290,7 @@ async def mines_manual_handler(callback: CallbackQuery, state: FSMContext):
     await state.update_data(mines_count=None, waiting_manual=True)
     await state.set_state(MinesGame.choosing_bet)
     await callback.message.edit_text(
-        f"<blockquote>💣 <b>Мины</b> — ввод вручную</blockquote>\n\n"
-        f"<blockquote>Введите количество мин от <b>2</b> до <b>24</b>:</blockquote>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите количество мин:</b></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
