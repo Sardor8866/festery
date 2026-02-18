@@ -1,3 +1,4 @@
+import asyncio
 import random
 import logging
 from aiogram import Router, F
