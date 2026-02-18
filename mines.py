@@ -144,25 +144,28 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
 
 
 def build_mines_select_keyboard() -> InlineKeyboardMarkup:
-    rows = []
-    row  = []
-    options = list(range(2, 25))
-    for i, m in enumerate(options):
+    presets = [2, 5, 10, 15, 18]
+    row = []
+    for m in presets:
         first = MINES_MULTIPLIERS[m][0]
         row.append(InlineKeyboardButton(
             text=f"{m}  x{first}",
             callback_data=f"mines_select_{m}",
             icon_custom_emoji_id=EMOJI_NUMBER
         ))
-        if len(row) == 4 or i == len(options) - 1:
-            rows.append(row)
-            row = []
-    rows.append([InlineKeyboardButton(
-        text="Назад",
-        callback_data="games",
-        icon_custom_emoji_id=EMOJI_BACK
-    )])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        row,
+        [InlineKeyboardButton(
+            text="Ввести вручную",
+            callback_data="mines_manual",
+            icon_custom_emoji_id=EMOJI_NUMBER
+        )],
+        [InlineKeyboardButton(
+            text="Назад",
+            callback_data="games",
+            icon_custom_emoji_id=EMOJI_BACK
+        )]
+    ])
 
 
 def game_text(session: dict) -> str:
@@ -251,6 +254,26 @@ async def mines_back_select(callback: CallbackQuery, state: FSMContext):
     await show_mines_menu(callback, pay_storage, None)
 
 
+@mines_router.callback_query(F.data == "mines_manual")
+async def mines_manual_handler(callback: CallbackQuery, state: FSMContext):
+    """Ввод количества мин вручную"""
+    await state.update_data(mines_count=None, waiting_manual=True)
+    await state.set_state(MinesGame.choosing_bet)
+    await callback.message.edit_text(
+        f"<blockquote>💣 <b>Мины</b> — ввод вручную</blockquote>\n\n"
+        f"<blockquote>Введите количество мин от <b>2</b> до <b>24</b>:</blockquote>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="Назад",
+                callback_data="mines_back_select",
+                icon_custom_emoji_id=EMOJI_BACK
+            )
+        ]])
+    )
+    await callback.answer()
+
+
 @mines_router.callback_query(F.data == "mines_play_again")
 async def mines_play_again(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
@@ -261,29 +284,13 @@ async def mines_play_again(callback: CallbackQuery, state: FSMContext):
 
 @mines_router.callback_query(F.data == "mines_exit")
 async def mines_exit(callback: CallbackQuery, state: FSMContext):
-    from payments import storage as pay_storage
     user_id = callback.from_user.id
     _sessions.pop(user_id, None)
     await state.clear()
-    balance = pay_storage.get_balance(user_id)
-    await callback.message.edit_text(
-        f"<blockquote>💣 Вы вышли из Мины</blockquote>\n\n"
-        f"<blockquote>💰 Баланс: <code>{balance:.2f}</code></blockquote>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text="Играть снова",
-                callback_data="mines_menu",
-                icon_custom_emoji_id=EMOJI_3POINT
-            )],
-            [InlineKeyboardButton(
-                text="Игры",
-                callback_data="games",
-                icon_custom_emoji_id=EMOJI_BACK
-            )],
-        ])
-    )
-    await callback.answer()
+    # Сразу переходим в меню игр через callback games
+    callback.data = "games"
+    from main import games_callback
+    await games_callback(callback, state)
 
 
 @mines_router.callback_query(F.data == "mines_noop")
@@ -418,9 +425,37 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
 # ========== ОБРАБОТКА СТАВКИ (вызов из main.py) ==========
 
 async def process_mines_bet(message: Message, state: FSMContext, storage):
-    user_id     = message.from_user.id
-    data        = await state.get_data()
-    mines_count = data.get('mines_count')
+    user_id = message.from_user.id
+    data    = await state.get_data()
+    mines_count  = data.get('mines_count')
+    waiting_manual = data.get('waiting_manual', False)
+
+    # Шаг 1: ждём ввод кол-ва мин вручную
+    if waiting_manual and mines_count is None:
+        try:
+            m = int(message.text.strip())
+        except ValueError:
+            await message.answer("❌ Введите целое число от 2 до 24.")
+            return
+        if m < 2 or m > 24:
+            await message.answer("❌ Число мин должно быть от 2 до 24.")
+            return
+        await state.update_data(mines_count=m, waiting_manual=False)
+        mults = MINES_MULTIPLIERS[m]
+        total_safe = GRID_SIZE * GRID_SIZE - m
+        mult_lines = ""
+        for i, mv in enumerate(mults):
+            mult_lines += f"  Гем {i+1}: <b>x{mv}</b>\n"
+        await message.answer(
+            f"<blockquote>💣 Мин: <b>{m}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
+            f"<blockquote><b>Множители:</b>\n{mult_lines}</blockquote>\n\n"
+            f"Введите сумму ставки:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="Назад", callback_data="mines_back_select", icon_custom_emoji_id=EMOJI_BACK)
+            ]])
+        )
+        return
 
     if mines_count is None:
         await state.clear()
