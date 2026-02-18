@@ -261,7 +261,7 @@ async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
     for i, m in enumerate(mults):
         mult_lines += f"  Гем {i+1}: <b>x{m}</b>\n"
 
-    text = f"<blockquote<b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>"
+    text = f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>"
     
     await callback.message.edit_text(
         text,
