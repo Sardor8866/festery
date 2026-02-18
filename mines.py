@@ -6,26 +6,19 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# ========== ТОЛЬКО ПРОВЕРЕННЫЕ ID ИЗ game.py ==========
-EMOJI_BACK      = "5906771962734057347"   # Назад / Выйти
-EMOJI_WIN       = "5199885118214255386"   # Взрыв (попал на мину)
-EMOJI_LOSE      = "5906986955911993888"   # Победа
-EMOJI_BALANCE   = "5443127283898405358"   # Баланс
-EMOJI_CROSS     = "5906949717859230132"   # Крест
-EMOJI_GOAL      = "5206607081334906820"   # Забрать (кэшаут)
-EMOJI_3POINT    = "5397782960512444700"   # Снова / Играть снова
-EMOJI_MISS      = "5210952531676504517"   # 💣 Мина (ячейка с миной)
-EMOJI_NUMBER    = "5456140674028019486"   # 🟦 Закрытая ячейка
-EMOJI_MORE      = "5449683594425410231"   # 💎 Гем (открытая безопасная)
-EMOJI_NECHET    = "5391032818111363540"   # 💥 Взрыв на открытой мине
-
-# Ячейки поля — все через icon_custom_emoji_id
-CELL_CLOSED  = EMOJI_NUMBER   # закрытая клетка (ещё не открыта)
-CELL_GEM     = EMOJI_MORE     # открытый гем (безопасная)
-CELL_MINE    = EMOJI_MISS     # мина (показывается после проигрыша)
-CELL_EXPLODE = EMOJI_NECHET   # взорванная мина (на которую нажали)
+# ========== ПРОВЕРЕННЫЕ ID ИЗ game.py (для кнопок управления) ==========
+EMOJI_BACK   = "5906771962734057347"
+EMOJI_GOAL   = "5206607081334906820"
+EMOJI_3POINT = "5397782960512444700"
+EMOJI_NUMBER = "5456140674028019486"
 
 GRID_SIZE = 5  # 5x5 = 25 клеток
+
+# Эмодзи ячеек — обычные, без кастомных (в тексте кнопки)
+CELL_CLOSED  = "🟦"   # закрытая, не открытая
+CELL_GEM     = "💎"   # открытый гем
+CELL_MINE    = "💣"   # мина (показывается после проигрыша)
+CELL_EXPLODE = "💥"   # мина на которую нажали
 
 # ========== МНОЖИТЕЛИ ==========
 MINES_MULTIPLIERS = {
@@ -67,10 +60,6 @@ _sessions: dict = {}
 
 # ========== ХЕЛПЕРЫ ==========
 
-def te(emoji_id: str, fallback: str) -> str:
-    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
-
-
 def get_multiplier(mines_count: int, gems_opened: int) -> float:
     if gems_opened == 0:
         return 1.0
@@ -94,20 +83,9 @@ def generate_board(mines_count: int) -> list:
     return board
 
 
-def make_cell_btn(text: str, emoji_id: str, callback: str) -> InlineKeyboardButton:
-    """Создаёт кнопку-ячейку с кастомным эмодзи через icon_custom_emoji_id"""
-    return InlineKeyboardButton(
-        text=text,
-        callback_data=callback,
-        icon_custom_emoji_id=emoji_id
-    )
-
-
 def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboardMarkup:
     board    = session['board']
     revealed = session['revealed']
-    # Запоминаем индекс взорванной мины
-    exploded = session.get('exploded_idx', -1)
     rows = []
 
     for row in range(GRID_SIZE):
@@ -118,23 +96,16 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             is_open = revealed[idx]
 
             if is_open:
-                if is_mine:
-                    # Именно та мина на которую нажали — взрыв
-                    btn = make_cell_btn("!", CELL_EXPLODE, "mines_noop")
-                else:
-                    # Открытый гем
-                    btn = make_cell_btn("+", CELL_GEM, "mines_noop")
+                text = CELL_EXPLODE if is_mine else CELL_GEM
+                cb   = "mines_noop"
             elif game_over and is_mine:
-                # Остальные мины после проигрыша
-                btn = make_cell_btn("x", CELL_MINE, "mines_noop")
+                text = CELL_MINE
+                cb   = "mines_noop"
             else:
-                # Закрытая клетка
-                if game_over:
-                    btn = make_cell_btn(".", CELL_CLOSED, "mines_noop")
-                else:
-                    btn = make_cell_btn(".", CELL_CLOSED, f"mines_cell_{idx}")
+                text = CELL_CLOSED
+                cb   = "mines_noop" if game_over else f"mines_cell_{idx}"
 
-            btn_row.append(btn)
+            btn_row.append(InlineKeyboardButton(text=text, callback_data=cb))
         rows.append(btn_row)
 
     # Управляющие кнопки
@@ -339,23 +310,20 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
     if session['board'][idx]:
         # МИНА
-        session['exploded_idx'] = idx
         mines_count = session['mines_count']
         bet         = session['bet']
         _sessions.pop(user_id, None)
         await state.clear()
 
         balance = pay_storage.get_balance(user_id)
-        text = (
+        await callback.message.edit_text(
             f"<b>💥 БУМ! Вы попали на мину!</b>\n\n"
             f"<blockquote>"
             f"💣 Мин было: <b>{mines_count}</b>\n"
             f"💰 Проиграно: <code>{bet}</code>\n"
             f"💰 Баланс: <code>{balance:.2f}</code>"
-            f"</blockquote>"
-        )
-        await callback.message.edit_text(
-            text, parse_mode=ParseMode.HTML,
+            f"</blockquote>",
+            parse_mode=ParseMode.HTML,
             reply_markup=build_game_keyboard(session, game_over=True)
         )
         await callback.answer("💥 Мина!")
@@ -377,22 +345,21 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             await state.clear()
 
             balance = pay_storage.get_balance(user_id)
-            text = (
+            await callback.message.edit_text(
                 f"<b>🏆 ПОБЕДА! Все гемы открыты!</b>\n\n"
                 f"<blockquote>"
                 f"⚡ Множитель: <b>x{mult}</b>\n"
                 f"💰 Выигрыш: <code>{winnings}</code>\n"
                 f"💰 Баланс: <code>{balance:.2f}</code>"
-                f"</blockquote>"
-            )
-            await callback.message.edit_text(
-                text, parse_mode=ParseMode.HTML,
+                f"</blockquote>",
+                parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session, game_over=True)
             )
             await callback.answer(f"🏆 Победа! +{winnings}")
         else:
             await callback.message.edit_text(
-                game_text(session), parse_mode=ParseMode.HTML,
+                game_text(session),
+                parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session)
             )
             await callback.answer(f"💎 x{mult}")
@@ -423,17 +390,15 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     balance = pay_storage.get_balance(user_id)
-    text = (
+    await callback.message.edit_text(
         f"<b>💰 Кэшаут!</b>\n\n"
         f"<blockquote>"
         f"💎 Гемов открыто: <b>{gems}</b>\n"
         f"⚡ Множитель: <b>x{mult}</b>\n"
         f"💰 Выигрыш: <code>{winnings}</code>\n"
         f"💰 Баланс: <code>{balance:.2f}</code>"
-        f"</blockquote>"
-    )
-    await callback.message.edit_text(
-        text, parse_mode=ParseMode.HTML,
+        f"</blockquote>",
+        parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
                 text="Играть снова",
@@ -480,16 +445,14 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         )
         return
 
-    # Списываем ставку
     storage.deduct_balance(user_id, bet)
 
     session = {
-        'board':        generate_board(mines_count),
-        'revealed':     [False] * (GRID_SIZE * GRID_SIZE),
-        'mines_count':  mines_count,
-        'bet':          bet,
-        'gems_opened':  0,
-        'exploded_idx': -1,
+        'board':       generate_board(mines_count),
+        'revealed':    [False] * (GRID_SIZE * GRID_SIZE),
+        'mines_count': mines_count,
+        'bet':         bet,
+        'gems_opened': 0,
     }
     _sessions[user_id] = session
     await state.set_state(MinesGame.playing)
