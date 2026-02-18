@@ -351,7 +351,7 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
             # ПОБЕДА
             bet      = session['bet']
             winnings = round(bet * mult, 2)
-            pay_storage.update_balance(user_id, winnings)
+            pay_storage.add_balance(user_id, winnings)
             _sessions.pop(user_id, None)
             await state.clear()
 
@@ -397,7 +397,7 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     mult        = get_multiplier(mines_count, gems)
     winnings    = round(bet * mult, 2)
 
-    pay_storage.update_balance(user_id, winnings)
+    pay_storage.add_balance(user_id, winnings)
     _sessions.pop(user_id, None)
     await state.clear()
 
@@ -460,7 +460,7 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         return
 
     # Списываем ставку
-    storage.update_balance(user_id, -bet)
+    storage.deduct_balance(user_id, bet)
 
     session = {
         'board':       generate_board(mines_count),
