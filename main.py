@@ -65,6 +65,9 @@ GAME_CALLBACKS = {
 # File ID для приветственного стикера
 WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
 
+
+# ID администраторов — добавь свой Telegram ID
+ADMIN_IDS = [8118184388]  # <- замени на свой ID
 # Роутер
 router = Router()
 
@@ -206,6 +209,56 @@ async def cmd_start(message: Message):
     except Exception as e:
         logging.error(f"Error in start: {e}")
         await message.answer("Произошла ошибка. Попробуйте позже.")
+
+
+# ========== АДМИН: /add ==========
+@router.message(F.text.startswith("/add"))
+async def cmd_add_balance(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ Нет доступа.")
+        return
+
+    parts = message.text.split()
+    if len(parts) != 3:
+        await message.answer(
+            "<b>⚙️ Использование:</b>\n"
+            "<code>/add [user_id] [сумма]</code>\n\n"
+            "<b>Пример:</b> <code>/add 123456789 100</code>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    try:
+        target_id = int(parts[1])
+        amount    = float(parts[2])
+    except ValueError:
+        await message.answer("❌ Неверный формат. ID должен быть числом, сумма — числом.")
+        return
+
+    if amount <= 0:
+        await message.answer("❌ Сумма должна быть больше 0.")
+        return
+
+    # Создаём пользователя если нет
+    storage.get_user(target_id)
+    storage.update_balance(target_id, amount)
+    new_balance = storage.get_balance(target_id)
+
+    # Синхронизируем с game
+    if betting_game:
+        betting_game.user_balances[target_id] = new_balance
+        betting_game.save_balances()
+
+    await message.answer(
+        f"<b>✅ Баланс выдан</b>\n\n"
+        f"<blockquote>"
+        f"👤 ID: <code>{target_id}</code>\n"
+        f"➕ Выдано: <code>{amount:.2f}</code>\n"
+        f"💰 Новый баланс: <code>{new_balance:.2f}</code>"
+        f"</blockquote>",
+        parse_mode=ParseMode.HTML
+    )
+    logging.info(f"Админ {message.from_user.id} выдал {amount} пользователю {target_id}. Новый баланс: {new_balance}")
 
 
 # ========== ПРОФИЛЬ ==========
