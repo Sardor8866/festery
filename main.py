@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 from aiogram import Bot, Dispatcher, Router, F
@@ -19,9 +18,6 @@ from game import (
     show_darts_menu, show_bowling_menu, show_exact_number_menu, request_amount,
     cancel_bet, is_bet_command, handle_text_bet_command
 )
-
-# Импортируем модуль мин
-from mines import mines_router, setup_mines
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -47,7 +43,6 @@ EMOJI_DEVELOPMENT = "5445355530111437729"
 EMOJI_WALLET = "5443127283898405358"
 EMOJI_STATS = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
-EMOJI_MINES = "5199988776655443322"  # 💣 для игры в мины
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
@@ -57,8 +52,7 @@ GAME_CALLBACKS = {
     'darts': 'custom_darts_004',
     'bowling': 'custom_bowling_005',
     'exact_number': 'custom_exact_006',
-    'back_to_games': 'custom_back_games_007',
-    'mines': 'custom_mines_008'  # Добавляем мины
+    'back_to_games': 'custom_back_games_007'
 }
 
 # File ID для приветственного стикера
@@ -117,9 +111,6 @@ def get_games_menu():
         ],
         [
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
-        ],
-        [  # Новая строка с игрой Мины
-            InlineKeyboardButton(text="💣 Мины", callback_data="play_mines")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
@@ -428,14 +419,11 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     betting_game = BettingGame(bot)
-    
-    # Инициализируем модуль мин
-    setup_mines(bot, betting_game)
 
-    # Подключаем все роутеры
-    dp.include_router(router)        # Основной роутер
-    dp.include_router(mines_router)  # Роутер для игры в мины
-    dp.include_router(payment_router) # Роутер для платежей
+    # router идет первым — он обрабатывает FSM-ставки
+    # payment_router идет вторым — он ловит числа без FSM через pending_action
+    dp.include_router(router)
+    dp.include_router(payment_router)
 
     setup_payments(bot)
 
@@ -474,4 +462,4 @@ async def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    asyncio.run(main()) 
