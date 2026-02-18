@@ -14,11 +14,22 @@ EMOJI_NUMBER = "5456140674028019486"
 
 GRID_SIZE = 5  # 5x5 = 25 клеток
 
+# ========== СКРЫТЫЕ МИНЫ ==========
+# Реальное кол-во мин на поле = mines_count + HIDDEN_MINES[mines_count]
+# При проигрыше показываем только mines_count мин (без скрытых)
+HIDDEN_MINES = {
+    2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 2, 10: 2,
+    11: 3, 12: 3, 13: 3, 14: 3, 15: 3, 16: 3,
+    17: 2, 18: 2, 19: 2, 20: 2, 21: 2,
+    22: 1, 23: 0, 24: 0,
+}
+
+
 # Эмодзи ячеек — обычные, без кастомных (в тексте кнопки)
-CELL_CLOSED  = "🌑"   # закрытая, не открытая
+CELL_CLOSED  = "🟦"   # закрытая, не открытая
 CELL_GEM     = "💎"   # открытый гем
-CELL_MINE    = "💢"   # мина (показывается после проигрыша)
-CELL_EXPLODE = "💢"   # мина на которую нажали
+CELL_MINE    = "💣"   # мина (показывается после проигрыша)
+CELL_EXPLODE = "💥"   # мина на которую нажали
 
 # ========== МНОЖИТЕЛИ ==========
 MINES_MULTIPLIERS = {
@@ -76,11 +87,25 @@ def get_next_mult(mines_count: int, gems_opened: int) -> float:
     return mults[gems_opened]
 
 
-def generate_board(mines_count: int) -> list:
+def generate_board(mines_count: int) -> tuple:
+    """Возвращает (board, real_mine_positions)
+    board — 25 клеток, True = мина (включая скрытые)
+    real_mine_positions — set позиций ТОЛЬКО реальных мин (без скрытых)
+    """
+    hidden = HIDDEN_MINES.get(mines_count, 0)
+    total_mines = mines_count + hidden
+    total_mines = min(total_mines, GRID_SIZE * GRID_SIZE - 1)  # защита
+
+    all_positions = random.sample(range(GRID_SIZE * GRID_SIZE), total_mines)
+    # Первые mines_count — реальные, остальные — скрытые
+    real_positions = set(all_positions[:mines_count])
+    hidden_positions = set(all_positions[mines_count:])
+
     board = [False] * (GRID_SIZE * GRID_SIZE)
-    for pos in random.sample(range(GRID_SIZE * GRID_SIZE), mines_count):
+    for pos in all_positions:
         board[pos] = True
-    return board
+
+    return board, real_positions
 
 
 def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboardMarkup:
@@ -95,14 +120,22 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             is_mine = board[idx]
             is_open = revealed[idx]
 
+            real_positions = session.get('real_positions', set())
+            is_real_mine = idx in real_positions
+
             if is_open:
-                text = CELL_EXPLODE if is_mine else CELL_GEM
-                cb   = "mines_noop"
-            elif game_over and is_mine:
+                # Клетка уже была открыта игроком
+                if is_mine:
+                    text = CELL_EXPLODE  # взорванная мина
+                else:
+                    text = CELL_GEM      # открытый гем
+                cb = "mines_noop"
+            elif game_over and is_real_mine:
+                # После проигрыша — показываем только реальные мины
                 text = CELL_MINE
                 cb   = "mines_noop"
-            elif game_over and not is_mine:
-                # После проигрыша — все безопасные клетки показываем как алмазы
+            elif game_over:
+                # После проигрыша — все остальные (безопасные + скрытые) = алмазы
                 text = CELL_GEM
                 cb   = "mines_noop"
             else:
@@ -179,7 +212,8 @@ def game_text(session: dict) -> str:
     mult       = get_multiplier(mines, gems)
     next_mult  = get_next_mult(mines, gems)
     profit     = round(bet * mult, 2)
-    total_safe = GRID_SIZE * GRID_SIZE - mines
+    hidden     = HIDDEN_MINES.get(mines, 0)
+    total_safe = GRID_SIZE * GRID_SIZE - mines - hidden
     safe_left  = total_safe - gems
 
     return (
@@ -350,7 +384,8 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         session['gems_opened'] += 1
         gems        = session['gems_opened']
         mines_count = session['mines_count']
-        total_safe  = GRID_SIZE * GRID_SIZE - mines_count
+        hidden      = HIDDEN_MINES.get(mines_count, 0)
+        total_safe  = GRID_SIZE * GRID_SIZE - mines_count - hidden
         mult        = get_multiplier(mines_count, gems)
 
         if gems == total_safe:
