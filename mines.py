@@ -16,7 +16,7 @@ GRID_SIZE = 5  # 5x5 = 25 клеток
 
 # Эмодзи ячеек — обычные, без кастомных (в тексте кнопки)
 CELL_CLOSED  = "🌑"   # закрытая, не открытая
-CELL_GEM     = "🍬"   # открытый гем
+CELL_GEM     = "💎"   # открытый гем
 CELL_MINE    = "💢"   # мина (показывается после проигрыша)
 CELL_EXPLODE = "💢"   # мина на которую нажали
 
@@ -101,9 +101,13 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             elif game_over and is_mine:
                 text = CELL_MINE
                 cb   = "mines_noop"
+            elif game_over and not is_mine:
+                # После проигрыша — все безопасные клетки показываем как алмазы
+                text = CELL_GEM
+                cb   = "mines_noop"
             else:
                 text = CELL_CLOSED
-                cb   = "mines_noop" if game_over else f"mines_cell_{idx}"
+                cb   = f"mines_cell_{idx}"
 
             btn_row.append(InlineKeyboardButton(text=text, callback_data=cb))
         rows.append(btn_row)
