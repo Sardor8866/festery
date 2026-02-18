@@ -456,9 +456,7 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
     balance = betting_game.get_balance(user_id)
     if balance < amount:
         await message.answer(
-            f"❌ <b>Недостаточно средств!</b>\n\n"
-            f"💰 Баланс: <code>{balance:.2f} USDT</code>\n"
-            f"💸 Нужно: <code>{amount:.2f} USDT</code>",
+            f"<blockquote><b><tg-emoji emoji-id=\"5447183459602669338\">❌</tg-emoji> Недостаточно средств!</b></blockquote>\n\n",
             parse_mode='HTML'
         )
         return
@@ -696,11 +694,7 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     ]])
     
     await callback.message.edit_text(
-        f"<b>{bet_config['name']}</b>\n\n"
-        f"<i>Введите сумму ставки:</i>\n"
-        f"<blockquote>Мин: <code>{MIN_BET} USDT</code>\n"
-        f"Макс: <code>{min(MAX_BET, balance):.2f} USDT</code>\n"
-        f"Выигрыш: <code>x{bet_config['multiplier']}</code></blockquote>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji> Введите сумму ставки</b></blockquote>\n\n",
         parse_mode='HTML',
         reply_markup=markup
     )
