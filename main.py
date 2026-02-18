@@ -67,7 +67,7 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 
 
 # ID администраторов — добавь свой Telegram ID
-ADMIN_IDS = [8118184388]  # <- замени на свой ID
+ADMIN_IDS = [123456789]  # <- замени на свой ID
 # Роутер
 router = Router()
 
@@ -241,7 +241,7 @@ async def cmd_add_balance(message: Message):
 
     # Создаём пользователя если нет
     storage.get_user(target_id)
-    storage.update_balance(target_id, amount)
+    storage.add_balance(target_id, amount)
     new_balance = storage.get_balance(target_id)
 
     # Синхронизируем с game
