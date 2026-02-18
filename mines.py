@@ -23,6 +23,9 @@ TOTAL_CELLS = FIELD_SIZE * FIELD_SIZE
 # Роутер для мин
 mines_router = Router()
 
+# Глобальная переменная для доступа к betting_game
+betting_game_instance = None
+
 # Класс состояний для FSM
 class MinesStates(StatesGroup):
     waiting_for_bet = State()
@@ -44,9 +47,7 @@ class MinesGame:
         multipliers = {}
         for mines in range(MIN_MINES, MAX_MINES + 1):
             # Чем больше мин, тем выше множитель
-            # Формула: (общее_клеток / (общее_клеток - мины)) ^ (количество_открытий)
             safe_cells = TOTAL_CELLS - mines
-            # Множитель за каждую открытую клетку увеличивается
             multipliers[mines] = []
             current_mult = 1.0
             for cells_opened in range(1, safe_cells + 1):
@@ -157,10 +158,10 @@ class MinesGame:
                 
                 if cell_index in game['opened_cells']:
                     # Открытая клетка - безопасна
-                    text = f"{EMOJI_GEM}✅"
+                    text = "✅💎"
                 elif show_mines and cell_index in game['mine_positions']:
                     # Показываем мину (при проигрыше)
-                    text = f"{EMOJI_MINE}💣"
+                    text = "💣"
                 else:
                     # Закрытая клетка
                     text = "⬜️"
@@ -265,7 +266,8 @@ async def cmd_mines(callback: CallbackQuery, state: FSMContext):
     """Начало игры в мины"""
     await state.clear()
     
-    balance = callback.bot.betting_game.get_balance(callback.from_user.id)
+    global betting_game_instance
+    balance = betting_game_instance.get_balance(callback.from_user.id)
     
     await callback.message.edit_text(
         f"<blockquote><b>💣 ИГРА МИНЫ</b></blockquote>\n\n"
@@ -275,7 +277,7 @@ async def cmd_mines(callback: CallbackQuery, state: FSMContext):
         f"• Открывайте клетки и забирайте выигрыш\n"
         f"• Чем больше мин, тем выше множитель\n"
         f"• Наткнулись на мину — проиграли ставку\n\n"
-        f"<b>Ваш баланс:</b> <code>{balance:.2f}</code> {EMOJI_COINS}\n\n"
+        f"<b>Ваш баланс:</b> <code>{balance:.2f}</code> 🪙\n\n"
         f"<i>Выберите количество мин:</i>",
         parse_mode="HTML",
         reply_markup=get_mines_count_keyboard()
@@ -291,13 +293,14 @@ async def process_mines_count(callback: CallbackQuery, state: FSMContext):
     await state.update_data(mines_count=mines_count)
     await state.set_state(MinesStates.waiting_for_bet)
     
-    balance = callback.bot.betting_game.get_balance(callback.from_user.id)
+    global betting_game_instance
+    balance = betting_game_instance.get_balance(callback.from_user.id)
     
     await callback.message.edit_text(
         f"<b>💣 Мины: {mines_count} шт.</b>\n\n"
-        f"<b>Ваш баланс:</b> <code>{balance:.2f}</code> {EMOJI_COINS}\n"
-        f"<b>Мин. ставка:</b> <code>{MIN_BET}</code> {EMOJI_COINS}\n"
-        f"<b>Макс. ставка:</b> <code>{MAX_BET}</code> {EMOJI_COINS}\n\n"
+        f"<b>Ваш баланс:</b> <code>{balance:.2f}</code> 🪙\n"
+        f"<b>Мин. ставка:</b> <code>{MIN_BET}</code> 🪙\n"
+        f"<b>Макс. ставка:</b> <code>{MAX_BET}</code> 🪙\n\n"
         f"<i>Введите сумму ставки:</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
@@ -308,7 +311,7 @@ async def process_mines_count(callback: CallbackQuery, state: FSMContext):
 
 
 @mines_router.message(MinesStates.waiting_for_bet)
-async def process_bet_amount(message, state: FSMContext):
+async def process_bet_amount(message: Message, state: FSMContext):
     """Обработка ввода суммы ставки"""
     try:
         bet = float(message.text)
@@ -323,8 +326,9 @@ async def process_bet_amount(message, state: FSMContext):
     user_data = await state.get_data()
     mines_count = user_data.get('mines_count')
     
+    global betting_game_instance
     # Создаем игру
-    game_created = message.bot.mines_game.new_game(
+    game_created = betting_game_instance.mines_game.new_game(
         message.from_user.id, 
         bet, 
         mines_count
@@ -339,26 +343,28 @@ async def process_bet_amount(message, state: FSMContext):
     await show_game_field(message, state)
 
 
-async def show_game_field(message, state: FSMContext):
+async def show_game_field(message: Message, state: FSMContext):
     """Показывает игровое поле"""
     user_id = message.from_user.id
-    game_info = message.bot.mines_game.get_game_info(user_id)
+    
+    global betting_game_instance
+    game_info = betting_game_instance.mines_game.get_game_info(user_id)
     
     if not game_info:
         await message.reply("❌ Игра не найдена")
         await state.clear()
         return
     
-    field_display = message.bot.mines_game.get_field_display(user_id)
+    field_display = betting_game_instance.mines_game.get_field_display(user_id)
     
     await message.answer(
         f"<b>💣 ИГРА МИНЫ</b>\n\n"
-        f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> {EMOJI_COINS}\n"
+        f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> 🪙\n"
         f"<b>Мин:</b> {game_info['mines']} 💣\n"
         f"<b>Открыто:</b> {game_info['opened']}\n"
         f"<b>Осталось безопасных:</b> {game_info['remaining']}\n"
         f"<b>Текущий множитель:</b> {game_info['multiplier']}x\n"
-        f"<b>Потенциальный выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> {EMOJI_COINS}\n\n"
+        f"<b>Потенциальный выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> 🪙\n\n"
         f"<i>Выбирайте клетки:</i>",
         parse_mode="HTML",
         reply_markup=field_display
@@ -373,24 +379,25 @@ async def open_cell(callback: CallbackQuery, state: FSMContext):
     _, _, row, col = callback.data.split("_")
     row, col = int(row), int(col)
     
-    result, game = callback.bot.mines_game.open_cell(callback.from_user.id, row, col)
+    global betting_game_instance
+    result, game = betting_game_instance.mines_game.open_cell(callback.from_user.id, row, col)
     
     if result is None:
         await callback.answer("Эта клетка уже открыта!")
         return
     
-    game_info = callback.bot.mines_game.get_game_info(callback.from_user.id)
+    game_info = betting_game_instance.mines_game.get_game_info(callback.from_user.id)
     
     if result is False:
         # Проигрыш
-        field_display = callback.bot.mines_game.get_field_display(
+        field_display = betting_game_instance.mines_game.get_field_display(
             callback.from_user.id, 
             show_mines=True
         )
         
         await callback.message.edit_text(
             f"<b>💣 ВЗОРВАЛОСЬ!</b>\n\n"
-            f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> {EMOJI_COINS} <b>ПРОИГРАНА</b>\n"
+            f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> 🪙 <b>ПРОИГРАНА</b>\n"
             f"<b>Мин:</b> {game_info['mines']} 💣\n"
             f"<b>Открыто:</b> {game_info['opened']}\n\n"
             f"<i>Попробуйте снова!</i>",
@@ -399,21 +406,21 @@ async def open_cell(callback: CallbackQuery, state: FSMContext):
         )
         
         # Удаляем игру
-        if callback.from_user.id in callback.bot.mines_game.active_games:
-            del callback.bot.mines_game.active_games[callback.from_user.id]
+        if callback.from_user.id in betting_game_instance.mines_game.active_games:
+            del betting_game_instance.mines_game.active_games[callback.from_user.id]
         
         await state.clear()
         
     elif result is True and game['game_over'] and game['win']:
         # Победа (открыты все клетки)
-        field_display = callback.bot.mines_game.get_field_display(
+        field_display = betting_game_instance.mines_game.get_field_display(
             callback.from_user.id, 
             show_mines=True
         )
         
         await callback.message.edit_text(
             f"<b>🎉 ПОБЕДА!</b>\n\n"
-            f"<b>Выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> {EMOJI_COINS}\n"
+            f"<b>Выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> 🪙\n"
             f"<b>Множитель:</b> {game_info['multiplier']}x\n"
             f"<b>Мин:</b> {game_info['mines']} 💣\n"
             f"<b>Открыто клеток:</b> {game_info['opened']}\n\n"
@@ -423,23 +430,23 @@ async def open_cell(callback: CallbackQuery, state: FSMContext):
         )
         
         # Удаляем игру
-        if callback.from_user.id in callback.bot.mines_game.active_games:
-            del callback.bot.mines_game.active_games[callback.from_user.id]
+        if callback.from_user.id in betting_game_instance.mines_game.active_games:
+            del betting_game_instance.mines_game.active_games[callback.from_user.id]
         
         await state.clear()
         
     else:
         # Продолжаем игру
-        field_display = callback.bot.mines_game.get_field_display(callback.from_user.id)
+        field_display = betting_game_instance.mines_game.get_field_display(callback.from_user.id)
         
         await callback.message.edit_text(
             f"<b>💣 ИГРА МИНЫ</b>\n\n"
-            f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> {EMOJI_COINS}\n"
+            f"<b>Ставка:</b> <code>{game_info['bet']:.2f}</code> 🪙\n"
             f"<b>Мин:</b> {game_info['mines']} 💣\n"
             f"<b>Открыто:</b> {game_info['opened']}\n"
             f"<b>Осталось безопасных:</b> {game_info['remaining']}\n"
             f"<b>Текущий множитель:</b> {game_info['multiplier']}x\n"
-            f"<b>Потенциальный выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> {EMOJI_COINS}\n\n"
+            f"<b>Потенциальный выигрыш:</b> <code>{game_info['potential_win']:.2f}</code> 🪙\n\n"
             f"<i>Выбирайте клетки:</i>",
             parse_mode="HTML",
             reply_markup=field_display
@@ -451,21 +458,22 @@ async def open_cell(callback: CallbackQuery, state: FSMContext):
 @mines_router.callback_query(F.data == "mines_cashout", MinesStates.playing)
 async def cashout(callback: CallbackQuery, state: FSMContext):
     """Забрать выигрыш"""
-    win_amount = callback.bot.mines_game.cashout(callback.from_user.id)
+    global betting_game_instance
+    win_amount = betting_game_instance.mines_game.cashout(callback.from_user.id)
     
     if not win_amount:
         await callback.answer("Нельзя забрать выигрыш сейчас!")
         return
     
-    game_info = callback.bot.mines_game.get_game_info(callback.from_user.id)
-    field_display = callback.bot.mines_game.get_field_display(
+    game_info = betting_game_instance.mines_game.get_game_info(callback.from_user.id)
+    field_display = betting_game_instance.mines_game.get_field_display(
         callback.from_user.id, 
         show_mines=True
     )
     
     await callback.message.edit_text(
         f"<b>💰 ВЫИГРЫШ ЗАБРАН</b>\n\n"
-        f"<b>Получено:</b> <code>{win_amount:.2f}</code> {EMOJI_COINS}\n"
+        f"<b>Получено:</b> <code>{win_amount:.2f}</code> 🪙\n"
         f"<b>Множитель:</b> {game_info['multiplier']}x\n"
         f"<b>Мин:</b> {game_info['mines']} 💣\n"
         f"<b>Открыто клеток:</b> {game_info['opened']}\n\n"
@@ -475,8 +483,8 @@ async def cashout(callback: CallbackQuery, state: FSMContext):
     )
     
     # Удаляем игру
-    if callback.from_user.id in callback.bot.mines_game.active_games:
-        del callback.bot.mines_game.active_games[callback.from_user.id]
+    if callback.from_user.id in betting_game_instance.mines_game.active_games:
+        del betting_game_instance.mines_game.active_games[callback.from_user.id]
     
     await state.clear()
     await callback.answer()
@@ -485,15 +493,16 @@ async def cashout(callback: CallbackQuery, state: FSMContext):
 @mines_router.callback_query(F.data == "mines_exit")
 async def exit_game(callback: CallbackQuery, state: FSMContext):
     """Выход из игры"""
+    global betting_game_instance
+    
     # Удаляем игру если есть
-    if callback.from_user.id in callback.bot.mines_game.active_games:
-        del callback.bot.mines_game.active_games[callback.from_user.id]
+    if callback.from_user.id in betting_game_instance.mines_game.active_games:
+        del betting_game_instance.mines_game.active_games[callback.from_user.id]
     
     await state.clear()
     
-    # Возвращаемся в меню игр
-    from game import get_games_menu_text
-    from main import get_games_menu
+    # Возвращаемся в меню игр - импортируем здесь чтобы избежать циклического импорта
+    from main import get_games_menu_text, get_games_menu
     
     await callback.message.edit_text(
         get_games_menu_text(callback.from_user.id),
@@ -508,5 +517,7 @@ async def exit_game(callback: CallbackQuery, state: FSMContext):
 
 def setup_mines(bot, betting_game):
     """Инициализация модуля мин"""
+    global betting_game_instance
+    betting_game_instance = betting_game
     bot.mines_game = MinesGame(bot, betting_game)
     logging.info("Модуль Mines инициализирован")
