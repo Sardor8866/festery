@@ -615,14 +615,14 @@ async def show_darts_menu(callback: CallbackQuery):
     """Показать меню дартса"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⚪Белое (x2.35)", callback_data="bet_darts_дартс_белое", icon_custom_emoji_id=EMOJI_DARTS),
-            InlineKeyboardButton(text="🔴Красное (x1.85)", callback_data="bet_darts_дартс_красное", icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="⚪Белое (x2.35)", callback_data="bet_darts_дартс_белое", 
+            InlineKeyboardButton(text="🔴Красное (x1.85)", callback_data="bet_darts_дартс_красное", 
         ],
         [
-            InlineKeyboardButton(text="Центр (x3.35)", callback_data="bet_darts_дартс_центр", icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="Центр (x3.35)", callback_data="bet_darts_дартс_центр", icon_custom_emoji_id=EMOJI_3POINT)
         ],
         [
-            InlineKeyboardButton(text="Мимо (x2.2)", callback_data="bet_darts_дартс_мимо", icon_custom_emoji_id=EMOJI_DARTS)
+            InlineKeyboardButton(text="Мимо (x2.2)", callback_data="bet_darts_дартс_мимо", icon_custom_emoji_id=EMOJI_MISS)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
@@ -630,12 +630,8 @@ async def show_darts_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback,
-        f"<b>🎯 Дартс</b>\n\n"
-        f"<i>Выберите тип ставки:</i>\n\n"
-        f"<blockquote>💡 <b>Команды:</b>\n"
-        f"<code>дартс белое 10</code>\n"
-        f"<code>дартс центр 25</code>\n"
-        f"<code>dart red 15</code></blockquote>",
+        f"<blockquote><b>🎯 Дартс</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup,
         parse_mode='HTML'
     )
@@ -645,11 +641,11 @@ async def show_bowling_menu(callback: CallbackQuery):
     """Показать меню боулинга"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Победа (x1.8)", callback_data="bet_bowling_боулинг_победа", icon_custom_emoji_id=EMOJI_BOWLING),
-            InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение", icon_custom_emoji_id=EMOJI_BOWLING)
+            InlineKeyboardButton(text="Победа (x1.8)", callback_data="bet_bowling_боулинг_победа", icon_custom_emoji_id=EMOJI_GOAL),
+            InlineKeyboardButton(text="Поражение (x1.8)", callback_data="bet_bowling_боулинг_поражение", icon_custom_emoji_id=EMOJI_MISS)
         ],
         [
-            InlineKeyboardButton(text="Страйк (x3.75)", callback_data="bet_bowling_боулинг_страйк", icon_custom_emoji_id=EMOJI_BOWLING)
+            InlineKeyboardButton(text="Страйк (x3.75)", callback_data="bet_bowling_боулинг_страйк", icon_custom_emoji_id=EMOJI_3POINT)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
@@ -657,12 +653,8 @@ async def show_bowling_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback,
-        f"<b>🎳 Боулинг</b>\n\n"
-        f"<i>Выберите тип ставки:</i>\n\n"
-        f"<blockquote>💡 <b>Команды:</b>\n"
-        f"<code>боулинг победа 10</code>\n"
-        f"<code>боулинг страйк 50</code>\n"
-        f"<code>bowling win 20</code></blockquote>",
+        f"<blockquote><b>🎳 Боулинг</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите исход:</i></b></blockquote>\n\n",
         reply_markup=markup,
         parse_mode='HTML'
     )
