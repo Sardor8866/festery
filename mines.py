@@ -6,17 +6,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# ========== ID КАСТОМНЫХ ЭМОДЗИ ==========
-EMOJI_MINE       = "5307996024738395492"
-EMOJI_GEM        = "5368324170671202286"
-EMOJI_BOMB_EXP   = "5199885118214255386"
-EMOJI_WIN        = "5440539497383087970"
-EMOJI_BACK       = "5906771962734057347"
-EMOJI_CASHOUT    = "5443127283898405358"
-EMOJI_BALANCE    = "5278467510604160626"
-EMOJI_CURRENCY   = "5197434882321567830"
-EMOJI_MULTIPLIER = "5197288647275071607"
-EMOJI_CANCEL     = "5906949717859230132"
+# ========== ТОЛЬКО ПРОВЕРЕННЫЕ ID ИЗ game.py ==========
+EMOJI_BACK       = "5906771962734057347"   # работает в game.py
+EMOJI_WIN        = "5199885118214255386"   # работает в game.py
+EMOJI_LOSE       = "5906986955911993888"   # работает в game.py
+EMOJI_BALANCE    = "5443127283898405358"   # работает в game.py
+EMOJI_CROSS      = "5906949717859230132"   # работает в game.py
+EMOJI_GOAL       = "5206607081334906820"   # работает в game.py (для "забрать")
+EMOJI_3POINT     = "5397782960512444700"   # работает в game.py (для "снова")
+EMOJI_MISS       = "5210952531676504517"   # работает в game.py
+EMOJI_NUMBER     = "5456140674028019486"   # работает в game.py (для выбора мин)
+EMOJI_MORE       = "5449683594425410231"   # работает в game.py
+EMOJI_NECHET     = "5391032818111363540"   # работает в game.py
 
 GRID_SIZE = 5  # 5x5 = 25 клеток
 
@@ -67,7 +68,7 @@ _sessions: dict = {}
 # ========== ХЕЛПЕРЫ ==========
 
 def te(emoji_id: str, fallback: str) -> str:
-    """tg-emoji тег для текста сообщений"""
+    """tg-emoji тег только для текста сообщений"""
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 
@@ -126,12 +127,12 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             ctrl.append(InlineKeyboardButton(
                 text=f"Забрать {cashout}",
                 callback_data="mines_cashout",
-                icon_custom_emoji_id=EMOJI_CASHOUT
+                icon_custom_emoji_id=EMOJI_GOAL       # проверенный ID из game.py
             ))
         ctrl.append(InlineKeyboardButton(
             text="Выйти",
             callback_data="mines_exit",
-            icon_custom_emoji_id=EMOJI_BACK
+            icon_custom_emoji_id=EMOJI_BACK           # проверенный ID из game.py
         ))
         rows.append(ctrl)
     else:
@@ -139,12 +140,12 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             InlineKeyboardButton(
                 text="Снова",
                 callback_data="mines_play_again",
-                icon_custom_emoji_id=EMOJI_MINE
+                icon_custom_emoji_id=EMOJI_3POINT     # проверенный ID из game.py
             ),
             InlineKeyboardButton(
                 text="Выйти",
                 callback_data="mines_exit",
-                icon_custom_emoji_id=EMOJI_BACK
+                icon_custom_emoji_id=EMOJI_BACK       # проверенный ID из game.py
             ),
         ])
 
@@ -152,7 +153,6 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
 
 
 def build_mines_select_keyboard() -> InlineKeyboardMarkup:
-    """Выбор кол-ва мин 2..24, по 4 в строке. Множитель первого гема в тексте."""
     rows = []
     row  = []
     options = list(range(2, 25))
@@ -161,7 +161,7 @@ def build_mines_select_keyboard() -> InlineKeyboardMarkup:
         row.append(InlineKeyboardButton(
             text=f"{m}  x{first}",
             callback_data=f"mines_select_{m}",
-            icon_custom_emoji_id=EMOJI_MINE
+            icon_custom_emoji_id=EMOJI_NUMBER         # проверенный ID из game.py
         ))
         if len(row) == 4 or i == len(options) - 1:
             rows.append(row)
@@ -169,7 +169,7 @@ def build_mines_select_keyboard() -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(
         text="Назад",
         callback_data="games",
-        icon_custom_emoji_id=EMOJI_BACK
+        icon_custom_emoji_id=EMOJI_BACK               # проверенный ID из game.py
     )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -185,14 +185,14 @@ def game_text(session: dict) -> str:
     safe_left  = total_safe - gems
 
     return (
-        f"<blockquote>{te(EMOJI_MINE,'💣')} <b>Мины</b> | Поле 5×5</blockquote>\n\n"
+        f"<blockquote><b>💣 Мины</b> | Поле 5×5</blockquote>\n\n"
         f"<blockquote>"
-        f"{te(EMOJI_BALANCE,'💵')} Ставка: <code>{bet}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
-        f"{te(EMOJI_MINE,'💣')} Мин: <b>{mines}</b>\n"
-        f"{te(EMOJI_GEM,'💎')} Открыто: <b>{gems}/{total_safe}</b>\n"
-        f"{te(EMOJI_MULTIPLIER,'⚡')} Текущий: <b>x{mult}</b>\n"
-        f"{te(EMOJI_MULTIPLIER,'⚡')} Следующий: <b>x{next_mult}</b>\n"
-        f"{te(EMOJI_CASHOUT,'💰')} К выплате: <code>{profit}</code> {te(EMOJI_CURRENCY,'🪙')}"
+        f"💰 Ставка: <code>{bet}</code>\n"
+        f"💣 Мин: <b>{mines}</b>\n"
+        f"💎 Открыто: <b>{gems}/{total_safe}</b>\n"
+        f"⚡ Текущий: <b>x{mult}</b>\n"
+        f"⚡ Следующий: <b>x{next_mult}</b>\n"
+        f"💰 К выплате: <code>{profit}</code>"
         f"</blockquote>\n\n"
         f"<i>Безопасных клеток осталось: {safe_left}</i>"
     )
@@ -204,9 +204,9 @@ async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     user_id = callback.from_user.id
     balance = storage.get_balance(user_id)
     text = (
-        f"<blockquote>{te(EMOJI_MINE,'💣')} <b>Мины</b> — поле 5×5</blockquote>\n\n"
+        f"<blockquote><b>💣 Мины</b> — поле 5×5</blockquote>\n\n"
         f"<blockquote>"
-        f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}\n\n"
+        f"💰 Баланс: <code>{balance:.2f}</code>\n\n"
         f"Выберите количество мин.\n"
         f"Рядом — множитель за первый безопасный гем."
         f"</blockquote>"
@@ -235,7 +235,7 @@ async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
         mult_lines += f"  Гем {i+1}: <b>x{m}</b>\n"
 
     text = (
-        f"<blockquote>{te(EMOJI_MINE,'💣')} Мин: <b>{mines_count}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
+        f"<blockquote>💣 Мин: <b>{mines_count}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
         f"<blockquote><b>Множители по каждому гему:</b>\n{mult_lines}</blockquote>\n\n"
         f"Введите сумму ставки:"
     )
@@ -276,14 +276,14 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     balance = pay_storage.get_balance(user_id)
     await callback.message.edit_text(
-        f"<blockquote>{te(EMOJI_BACK,'◀️')} Вы вышли из Мины</blockquote>\n\n"
-        f"<blockquote>{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}</blockquote>",
+        f"<blockquote>💣 Вы вышли из Мины</blockquote>\n\n"
+        f"<blockquote>💰 Баланс: <code>{balance:.2f}</code></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
                 text="Играть снова",
                 callback_data="mines_menu",
-                icon_custom_emoji_id=EMOJI_MINE
+                icon_custom_emoji_id=EMOJI_3POINT
             )],
             [InlineKeyboardButton(
                 text="Игры",
@@ -326,11 +326,11 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
         balance = pay_storage.get_balance(user_id)
         text = (
-            f"<blockquote>{te(EMOJI_BOMB_EXP,'💥')} <b>БУМ! Вы попали на мину!</b></blockquote>\n\n"
+            f"<b>💥 БУМ! Вы попали на мину!</b>\n\n"
             f"<blockquote>"
-            f"{te(EMOJI_MINE,'💣')} Мин было: <b>{mines_count}</b>\n"
-            f"{te(EMOJI_BALANCE,'💵')} Проиграно: <code>{bet}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
-            f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
+            f"💣 Мин было: <b>{mines_count}</b>\n"
+            f"💰 Проиграно: <code>{bet}</code>\n"
+            f"💰 Баланс: <code>{balance:.2f}</code>"
             f"</blockquote>"
         )
         await callback.message.edit_text(
@@ -357,11 +357,11 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
             balance = pay_storage.get_balance(user_id)
             text = (
-                f"<blockquote>{te(EMOJI_WIN,'🏆')} <b>ПОБЕДА! Все гемы открыты!</b></blockquote>\n\n"
+                f"<b>🏆 ПОБЕДА! Все гемы открыты!</b>\n\n"
                 f"<blockquote>"
-                f"{te(EMOJI_MULTIPLIER,'⚡')} Множитель: <b>x{mult}</b>\n"
-                f"{te(EMOJI_CASHOUT,'💰')} Выигрыш: <code>{winnings}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
-                f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
+                f"⚡ Множитель: <b>x{mult}</b>\n"
+                f"💰 Выигрыш: <code>{winnings}</code>\n"
+                f"💰 Баланс: <code>{balance:.2f}</code>"
                 f"</blockquote>"
             )
             await callback.message.edit_text(
@@ -403,12 +403,12 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
 
     balance = pay_storage.get_balance(user_id)
     text = (
-        f"<blockquote>{te(EMOJI_CASHOUT,'💰')} <b>Кэшаут!</b></blockquote>\n\n"
+        f"<b>💰 Кэшаут!</b>\n\n"
         f"<blockquote>"
-        f"{te(EMOJI_GEM,'💎')} Гемов открыто: <b>{gems}</b>\n"
-        f"{te(EMOJI_MULTIPLIER,'⚡')} Множитель: <b>x{mult}</b>\n"
-        f"{te(EMOJI_CASHOUT,'💰')} Выигрыш: <code>{winnings}</code> {te(EMOJI_CURRENCY,'🪙')}\n"
-        f"{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}"
+        f"💎 Гемов открыто: <b>{gems}</b>\n"
+        f"⚡ Множитель: <b>x{mult}</b>\n"
+        f"💰 Выигрыш: <code>{winnings}</code>\n"
+        f"💰 Баланс: <code>{balance:.2f}</code>"
         f"</blockquote>"
     )
     await callback.message.edit_text(
@@ -417,7 +417,7 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
             [InlineKeyboardButton(
                 text="Играть снова",
                 callback_data="mines_menu",
-                icon_custom_emoji_id=EMOJI_MINE
+                icon_custom_emoji_id=EMOJI_3POINT
             )],
             [InlineKeyboardButton(
                 text="Игры",
@@ -447,22 +447,19 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         return
 
     if bet <= 0:
-        await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_CANCEL}\">❌</tg-emoji> Ставка должна быть больше 0.",
-            parse_mode=ParseMode.HTML
-        )
+        await message.answer("❌ Ставка должна быть больше 0.")
         return
 
     balance = storage.get_balance(user_id)
     if bet > balance:
         await message.answer(
-            f"<blockquote><b><tg-emoji emoji-id=\"{EMOJI_CANCEL}\">❌</tg-emoji> Недостаточно средств!</b></blockquote>\n\n"
-            f"<blockquote>{te(EMOJI_BALANCE,'💵')} Баланс: <code>{balance:.2f}</code> {te(EMOJI_CURRENCY,'🪙')}</blockquote>",
+            f"<blockquote><b>❌ Недостаточно средств!</b></blockquote>\n\n"
+            f"<blockquote>💰 Баланс: <code>{balance:.2f}</code></blockquote>",
             parse_mode=ParseMode.HTML
         )
         return
 
-    # Списываем ставку сразу
+    # Списываем ставку
     storage.update_balance(user_id, -bet)
 
     session = {
