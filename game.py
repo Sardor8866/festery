@@ -543,20 +543,20 @@ async def show_dice_menu(callback: CallbackQuery):
 async def show_exact_number_menu(callback: CallbackQuery):
     """Показать меню точного числа"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="1️⃣ (x4.7)", callback_data="bet_dice_куб_1"),
-            InlineKeyboardButton(text="2️⃣ (x4.7)", callback_data="bet_dice_куб_2"),
-            InlineKeyboardButton(text="3️⃣ (x4.7)", callback_data="bet_dice_куб_3")
-        ],
-        [
-            InlineKeyboardButton(text="4️⃣ (x4.7)", callback_data="bet_dice_куб_4"),
-            InlineKeyboardButton(text="5️⃣ (x4.7)", callback_data="bet_dice_куб_5"),
-            InlineKeyboardButton(text="6️⃣ (x4.7)", callback_data="bet_dice_куб_6")
-        ],
-        [
-            InlineKeyboardButton(text="Назад", callback_data="custom_dice_001", icon_custom_emoji_id=EMOJI_BACK)
-        ]
-    ])
+    [
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_1", icon_custom_emoji_id="5382322671679708881"),
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_2", icon_custom_emoji_id="5381990043642502553"),
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_3", icon_custom_emoji_id="5381879959335738545")
+    ],
+    [
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_4", icon_custom_emoji_id="5382054253403577563"),
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_5", icon_custom_emoji_id="5391197405553107640"),
+        InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_6", icon_custom_emoji_id="5390966190283694453")
+    ],
+    [
+        InlineKeyboardButton(text="Назад", callback_data="custom_dice_001", icon_custom_emoji_id=EMOJI_BACK)
+    ]
+])
     
     await safe_edit_message(callback,
         f"<blockquote><b><tg-emoji emoji-id=\"5456140674028019486\">🎰</tg-emoji> Точное число</b></blockquote>\n\n"
