@@ -401,11 +401,11 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
             balance = pay_storage.get_balance(user_id)
             await callback.message.edit_text(
-                f"<b>🏆 ПОБЕДА! Все гемы открыты!</b>\n\n"
+                f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы выиграли!</b></blockquote>\n\n"
                 f"<blockquote>"
-                f"⚡ Множитель: <b>x{mult}</b>\n"
-                f"💰 Выигрыш: <code>{winnings}</code>\n"
-                f"💰 Баланс: <code>{balance:.2f}</code>"
+                f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
+                f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+                f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
                 f"</blockquote>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session, game_over=True)
@@ -417,7 +417,7 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session)
             )
-            await callback.answer(f"💎 x{mult}")
+            await callback.answer(f"💎x{mult}")
 
 
 @mines_router.callback_query(F.data == "mines_cashout")
@@ -446,12 +446,11 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
 
     balance = pay_storage.get_balance(user_id)
     await callback.message.edit_text(
-        f"<b>💰 Кэшаут!</b>\n\n"
+        f"<blockquote><b><tg-emoji emoji-id=\"5312441427764989435\">🎰</tg-emoji>Кэшаут!</b></blockquote>\n\n"
         f"<blockquote>"
-        f"💎 Гемов открыто: <b>{gems}</b>\n"
-        f"⚡ Множитель: <b>x{mult}</b>\n"
-        f"💰 Выигрыш: <code>{winnings}</code>\n"
-        f"💰 Баланс: <code>{balance:.2f}</code>"
+        f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
+                f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+                f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
         f"</blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -467,7 +466,7 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
             )],
         ])
     )
-    await callback.answer(f"💰 +{winnings}!")
+    await callback.answer(f"💰+{winnings}!")
 
 
 # ========== ОБРАБОТКА СТАВКИ (вызов из main.py) ==========
