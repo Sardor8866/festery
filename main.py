@@ -49,6 +49,7 @@ EMOJI_DEVELOPMENT= "5445355530111437729"
 EMOJI_WALLET     = "5443127283898405358"
 EMOJI_STATS      = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
+EMOJI_MINES      = "5307996024738395492"
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
@@ -116,7 +117,7 @@ def get_games_menu():
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
         ],
         [
-            InlineKeyboardButton(text="💣 Мины", callback_data="mines_menu")
+            InlineKeyboardButton(text="Мины", callback_data="mines_menu", icon_custom_emoji_id=EMOJI_MINES)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
