@@ -372,17 +372,16 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
         balance = pay_storage.get_balance(user_id)
         await callback.message.edit_text(
-            f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы попали на мину!</b></blockquote>\n\n"
-            f"<blockquote>"
-            f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-            f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
-            f"</blockquote>",
-            f"<blockquote><b><i>Вы проиграли ставку! это не повод сдаваться!</i></b></blockquote>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=build_game_keyboard(session, game_over=True)
+        f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы попали на мину!</b></blockquote>\n\n"
+        f"<blockquote>"
+        f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Баланс: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+        f"</blockquote>\n\n"
+        f"<blockquote><b><i>Вы проиграли ставку! Это не повод сдаваться!</i></b></blockquote>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=build_game_keyboard(session, game_over=True)
         )
         await callback.answer("💥Мина!")
-
     else:
         # ГЕМ
         session['gems_opened'] += 1
