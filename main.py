@@ -20,6 +20,11 @@ from game import (
     cancel_bet, is_bet_command, handle_text_bet_command
 )
 
+# Импортируем модуль Мины
+from mines import (
+    mines_router, MinesGame, show_mines_menu, process_mines_bet
+)
+
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
 WEBHOOK_PATH = "/webhook"
@@ -32,28 +37,28 @@ else:
     WEBHOOK_URL = f"https://festery.onrender.com{WEBHOOK_PATH}"
 
 # ID кастомных эмодзи
-EMOJI_WELCOME = "5199885118214255386"
-EMOJI_PROFILE = "5906581476639513176"
-EMOJI_PARTNERS = "5906986955911993888"
-EMOJI_GAMES = "5424972470023104089"
-EMOJI_LEADERS = "5440539497383087970"
-EMOJI_ABOUT = "5251203410396458957"
-EMOJI_CRYPTOBOT = "5427054176246991778"
-EMOJI_BACK = "5906771962734057347"
-EMOJI_DEVELOPMENT = "5445355530111437729"
-EMOJI_WALLET = "5443127283898405358"
-EMOJI_STATS = "5197288647275071607"
+EMOJI_WELCOME    = "5199885118214255386"
+EMOJI_PROFILE    = "5906581476639513176"
+EMOJI_PARTNERS   = "5906986955911993888"
+EMOJI_GAMES      = "5424972470023104089"
+EMOJI_LEADERS    = "5440539497383087970"
+EMOJI_ABOUT      = "5251203410396458957"
+EMOJI_CRYPTOBOT  = "5427054176246991778"
+EMOJI_BACK       = "5906771962734057347"
+EMOJI_DEVELOPMENT= "5445355530111437729"
+EMOJI_WALLET     = "5443127283898405358"
+EMOJI_STATS      = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
-    'dice': 'custom_dice_001',
-    'basketball': 'custom_basketball_002',
-    'football': 'custom_football_003',
-    'darts': 'custom_darts_004',
-    'bowling': 'custom_bowling_005',
-    'exact_number': 'custom_exact_006',
-    'back_to_games': 'custom_back_games_007'
+    'dice':        'custom_dice_001',
+    'basketball':  'custom_basketball_002',
+    'football':    'custom_football_003',
+    'darts':       'custom_darts_004',
+    'bowling':     'custom_bowling_005',
+    'exact_number':'custom_exact_006',
+    'back_to_games':'custom_back_games_007'
 }
 
 # File ID для приветственного стикера
@@ -68,17 +73,14 @@ betting_game = None
 
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
 def sync_balances(user_id: int):
-    """Синхронизирует баланс между storage и betting_game"""
     global betting_game
     if betting_game and storage:
         payment_balance = storage.get_balance(user_id)
-        game_balance = betting_game.get_balance(user_id)
-
+        game_balance    = betting_game.get_balance(user_id)
         if abs(payment_balance - game_balance) > 0.01:
             logging.info(f"Синхронизация баланса для user {user_id}: payment={payment_balance}, game={game_balance}")
             betting_game.user_balances[user_id] = payment_balance
             betting_game.save_balances()
-
         return payment_balance
     return 0
 
@@ -87,12 +89,12 @@ def sync_balances(user_id: int):
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Профиль", callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
+            InlineKeyboardButton(text="Профиль",  callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
             InlineKeyboardButton(text="Партнёры", callback_data="partners", icon_custom_emoji_id=EMOJI_PARTNERS)
         ],
         [
-            InlineKeyboardButton(text="Игры", callback_data="games", icon_custom_emoji_id=EMOJI_GAMES),
-            InlineKeyboardButton(text="Лидеры", callback_data="leaders", icon_custom_emoji_id=EMOJI_LEADERS)
+            InlineKeyboardButton(text="Игры",    callback_data="games",   icon_custom_emoji_id=EMOJI_GAMES),
+            InlineKeyboardButton(text="Лидеры",  callback_data="leaders", icon_custom_emoji_id=EMOJI_LEADERS)
         ],
         [
             InlineKeyboardButton(text="О проекте", callback_data="about", icon_custom_emoji_id=EMOJI_ABOUT)
@@ -103,15 +105,23 @@ def get_main_menu():
 def get_games_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🎲 Кубик", callback_data=GAME_CALLBACKS['dice']),
+            InlineKeyboardButton(text="🎲 Кубик",    callback_data=GAME_CALLBACKS['dice']),
             InlineKeyboardButton(text="🏀 Баскетбол", callback_data=GAME_CALLBACKS['basketball'])
         ],
         [
-            InlineKeyboardButton(text="⚽️ Футбол", callback_data=GAME_CALLBACKS['football']),
-            InlineKeyboardButton(text="🎯 Дартс", callback_data=GAME_CALLBACKS['darts'])
+            InlineKeyboardButton(text="⚽️ Футбол",  callback_data=GAME_CALLBACKS['football']),
+            InlineKeyboardButton(text="🎯 Дартс",   callback_data=GAME_CALLBACKS['darts'])
         ],
         [
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
+        ],
+        [
+            # Новая кнопка Мины
+            InlineKeyboardButton(
+                text="Мины",
+                callback_data="mines_menu",
+                icon_custom_emoji_id="5307996024738395492"
+            )
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
@@ -122,8 +132,8 @@ def get_games_menu():
 def get_profile_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Пополнить", callback_data="deposit", icon_custom_emoji_id=EMOJI_WALLET),
-            InlineKeyboardButton(text="Вывести", callback_data="withdraw", icon_custom_emoji_id=EMOJI_WITHDRAWAL)
+            InlineKeyboardButton(text="Пополнить", callback_data="deposit",  icon_custom_emoji_id=EMOJI_WALLET),
+            InlineKeyboardButton(text="Вывести",   callback_data="withdraw", icon_custom_emoji_id=EMOJI_WITHDRAWAL)
         ],
         [
             InlineKeyboardButton(text="На главную", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
@@ -161,7 +171,7 @@ def get_games_menu_text(user_id: int):
 def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
     balance = sync_balances(user_id)
     user_data = storage.get_user(user_id)
-    total_deposits = user_data.get('total_deposits', 0)
+    total_deposits    = user_data.get('total_deposits', 0)
     total_withdrawals = user_data.get('total_withdrawals', 0)
 
     if 11 <= days_in_project <= 19:
@@ -191,7 +201,6 @@ async def cmd_start(message: Message):
     try:
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
-
         await message.answer_sticker(sticker=WELCOME_STICKER_ID)
         await message.answer(
             get_main_menu_text(),
@@ -206,16 +215,17 @@ async def cmd_start(message: Message):
 # ========== ПРОФИЛЬ ==========
 @router.callback_query(F.data == "profile")
 async def profile_callback(callback: CallbackQuery, state: FSMContext):
-    # Сбрасываем все состояния
     await state.clear()
-    storage.clear_pending(callback.from_user.id)
-    sync_balances(callback.from_user.id)
+    from datetime import datetime
+    user_data     = storage.get_user(callback.from_user.id)
+    join_date_str = user_data.get('join_date', datetime.now().strftime('%Y-%m-%d'))
+    join_date     = datetime.strptime(join_date_str, '%Y-%m-%d')
+    days_in_project = (datetime.now() - join_date).days
 
     await callback.message.edit_text(
-        get_profile_text(callback.from_user.first_name, 30, callback.from_user.id),
+        get_profile_text(callback.from_user.first_name, days_in_project, callback.from_user.id),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_profile_menu(),
-        disable_web_page_preview=True
+        reply_markup=get_profile_menu()
     )
     await callback.answer()
 
@@ -224,40 +234,44 @@ async def profile_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "games")
 async def games_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    storage.clear_pending(callback.from_user.id)
-
     await callback.message.edit_text(
         get_games_menu_text(callback.from_user.id),
         parse_mode=ParseMode.HTML,
-        reply_markup=get_games_menu(),
-        disable_web_page_preview=True
+        reply_markup=get_games_menu()
     )
     await callback.answer()
 
 
-# ========== ОБРАБОТЧИКИ ИГР ==========
+# ========== МИНЫ — ВХОД ==========
+@router.callback_query(F.data == "mines_menu")
+async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await show_mines_menu(callback, storage, betting_game)
+
+
+# ========== ОСТАЛЬНЫЕ ИГРЫ ==========
 @router.callback_query(F.data == GAME_CALLBACKS['dice'])
-async def dice_game(callback: CallbackQuery, state: FSMContext):
+async def dice_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_dice_menu(callback)
 
 @router.callback_query(F.data == GAME_CALLBACKS['basketball'])
-async def basketball_game(callback: CallbackQuery, state: FSMContext):
+async def basketball_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_basketball_menu(callback)
 
 @router.callback_query(F.data == GAME_CALLBACKS['football'])
-async def football_game(callback: CallbackQuery, state: FSMContext):
+async def football_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_football_menu(callback)
 
 @router.callback_query(F.data == GAME_CALLBACKS['darts'])
-async def darts_game(callback: CallbackQuery, state: FSMContext):
+async def darts_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_darts_menu(callback)
 
 @router.callback_query(F.data == GAME_CALLBACKS['bowling'])
-async def bowling_game(callback: CallbackQuery, state: FSMContext):
+async def bowling_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_bowling_menu(callback)
 
@@ -279,9 +293,7 @@ async def handle_cancel_bet(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    # Устанавливаем pending — payments.py увидит его при вводе числа
     storage.set_pending(callback.from_user.id, 'deposit')
-
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
         f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму пополнения:</i></blockquote>",
@@ -295,7 +307,6 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-
     balance = sync_balances(callback.from_user.id)
 
     if balance < MIN_WITHDRAWAL:
@@ -309,9 +320,7 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
         await callback.answer(f"⏳ Подождите {minutes} мин {seconds} сек", show_alert=True)
         return
 
-    # Устанавливаем pending — payments.py увидит его при вводе числа
     storage.set_pending(callback.from_user.id, 'withdraw')
-
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
         f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму вывода:</i></blockquote>",
@@ -321,11 +330,16 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ТЕКСТОВЫЕ СООБЩЕНИЯ (ставки) ==========
+# ========== ТЕКСТОВЫЕ СООБЩЕНИЯ ==========
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
-    """Обработка текста — команды ставок или ввод суммы"""
     from payments import handle_amount_input
+
+    # Ставка в игре Мины (ввод суммы)
+    current_state = await state.get_state()
+    if current_state == MinesGame.choosing_bet:
+        await process_mines_bet(message, state, storage)
+        return
 
     # Команды ставок (не числа)
     if is_bet_command(message.text):
@@ -335,16 +349,13 @@ async def handle_text_message(message: Message, state: FSMContext):
     # Числовой ввод
     try:
         float(message.text)
-        current_state = await state.get_state()
         if current_state:
-            # В процессе ставки — передаём в игру
             from game import process_bet_amount
             await process_bet_amount(message, state, betting_game)
         else:
-            # Нет FSM — передаём в payments (депозит/вывод)
             await handle_amount_input(message)
     except ValueError:
-        pass  # Неизвестный текст — игнорируем
+        pass
 
 
 # ========== ПАРТНЁРЫ ==========
@@ -403,7 +414,6 @@ async def about_callback(callback: CallbackQuery, state: FSMContext):
 async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     storage.clear_pending(callback.from_user.id)
-
     await callback.message.edit_text(
         get_main_menu_text(),
         parse_mode=ParseMode.HTML,
@@ -417,13 +427,16 @@ async def main():
     global betting_game
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher(storage=MemoryStorage())
+    dp  = Dispatcher(storage=MemoryStorage())
 
     betting_game = BettingGame(bot)
 
-    # router идет первым — он обрабатывает FSM-ставки
-    # payment_router идет вторым — он ловит числа без FSM через pending_action
+    # Порядок роутеров важен:
+    # 1. router — основной (FSM ставки, мины, навигация)
+    # 2. mines_router — обработчики кнопок игры мины
+    # 3. payment_router — числа без FSM (депозит/вывод)
     dp.include_router(router)
+    dp.include_router(mines_router)
     dp.include_router(payment_router)
 
     setup_payments(bot)
