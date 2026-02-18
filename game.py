@@ -717,21 +717,18 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
         amount = float(message.text)
         
         if amount < MIN_BET:
-            await message.answer(f"❌ Минимальная ставка: {MIN_BET} USDT")
+            await message.answer(f"<tg-emoji emoji-id=\"5447183459602669338\">❌</tg-emoji> Минимальная ставка: {MIN_BET} <tg-emoji emoji-id=\"5197434882321567830\">❌</tg-emoji>")
             return
         
         if amount > MAX_BET:
-            await message.answer(f"❌ Максимальная ставка: {MAX_BET} USDT")
+            await message.answer(f"<tg-emoji emoji-id=\"5447183459602669338\">❌</tg-emoji> Максимальная ставка: {MAX_BET} <tg-emoji emoji-id=\"5197434882321567830\">❌</tg-emoji>")
             return
             
         # Проверка баланса ТОЛЬКО ЗДЕСЬ, после ввода суммы
         balance = betting_game.get_balance(user_id)
         if balance < amount:
             await message.answer(
-                f"❌ <b>Недостаточно средств!</b>\n\n"
-                f"💰 Ваш баланс: <code>{balance:.2f} USDT</code>\n"
-                f"💸 Сумма ставки: <code>{amount:.2f} USDT</code>\n\n"
-                f"<i>Пополните баланс в профиле</i>",
+                f"<blockquote><b><tg-emoji emoji-id=\"5447183459602669338\">❌</tg-emoji> Недостаточно средств!</b></blockquote>\n\n",
                 parse_mode='HTML'
             )
             # Очищаем pending bet
