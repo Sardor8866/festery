@@ -284,13 +284,19 @@ async def mines_play_again(callback: CallbackQuery, state: FSMContext):
 
 @mines_router.callback_query(F.data == "mines_exit")
 async def mines_exit(callback: CallbackQuery, state: FSMContext):
+    from payments import storage as pay_storage
     user_id = callback.from_user.id
     _sessions.pop(user_id, None)
     await state.clear()
-    # Сразу переходим в меню игр через callback games
-    callback.data = "games"
-    from main import games_callback
-    await games_callback(callback, state)
+    sync_balances = getattr(callback.message, '_sync_balances', None)
+    balance = pay_storage.get_balance(user_id)
+    from main import get_games_menu, get_games_menu_text
+    await callback.message.edit_text(
+        get_games_menu_text(user_id),
+        parse_mode="HTML",
+        reply_markup=get_games_menu()
+    )
+    await callback.answer()
 
 
 @mines_router.callback_query(F.data == "mines_noop")
