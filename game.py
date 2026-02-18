@@ -532,12 +532,8 @@ async def show_dice_menu(callback: CallbackQuery):
     ])
     
     await safe_edit_message(callback, 
-        f"<b>🎲 Кубик</b>\n\n"
-        f"<i>Выберите тип ставки:</i>\n\n"
-        f"<blockquote>💡 <b>Команды:</b>\n"
-        f"<code>куб нечет 10</code>\n"
-        f"<code>куб 2больше 50</code>\n"
-        f"<code>куб 1 25</code></blockquote>",
+        f"<blockquote><b>🎲 Кубик</b></blockquote>\n\n"
+        f"<blockquote><b><i>Выберите тип ставки:</i></b></blockquote>\n\n",
         reply_markup=markup,
         parse_mode='HTML'
     )
