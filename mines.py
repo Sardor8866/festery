@@ -218,16 +218,13 @@ def game_text(session: dict) -> str:
     safe_left  = total_safe - gems
 
     return (
-        f"<blockquote><b>💣 Мины</b> | Поле 5×5</blockquote>\n\n"
+        f"<blockquote><b>💣 Мины</b></blockquote>\n\n"
         f"<blockquote>"
-        f"💰 Ставка: <code>{bet}</code>\n"
+        f"💰 Ставка: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
         f"💣 Мин: <b>{mines}</b>\n"
-        f"💎 Открыто: <b>{gems}/{total_safe}</b>\n"
-        f"⚡ Текущий: <b>x{mult}</b>\n"
-        f"⚡ Следующий: <b>x{next_mult}</b>\n"
-        f"💰 К выплате: <code>{profit}</code>"
+        f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b>x{mult}</b>\n"
+        f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b>x{next_mult}</b>\n"
         f"</blockquote>\n\n"
-        f"<i>Безопасных клеток осталось: {safe_left}</i>"
     )
 
 
@@ -237,12 +234,9 @@ async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     user_id = callback.from_user.id
     balance = storage.get_balance(user_id)
     text = (
-        f"<blockquote><b>💣 Мины</b> — поле 5×5</blockquote>\n\n"
-        f"<blockquote>"
-        f"💰 Баланс: <code>{balance:.2f}</code>\n\n"
-        f"Выберите количество мин.\n"
-        f"Рядом — множитель за первый безопасный гем."
-        f"</blockquote>"
+        f"<blockquote><b>💣 Мины</b></blockquote>\n\n"
+        f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></b></blockquote>\n\n"
+        f"<blockquote><b>Выберите количество мин:</b></blockquote>\n"
     )
     await callback.message.edit_text(
         text,
