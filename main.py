@@ -67,7 +67,7 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 
 
 # ID администраторов — добавь свой Telegram ID
-ADMIN_IDS = [123456789]  # <- замени на свой ID
+ADMIN_IDS = [8118184388]  # <- замени на свой ID
 # Роутер
 router = Router()
 
