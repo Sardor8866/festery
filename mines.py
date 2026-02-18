@@ -527,12 +527,15 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
 
     storage.deduct_balance(user_id, bet)
 
+    board, real_positions = generate_board(mines_count)
     session = {
-        'board':       generate_board(mines_count),
-        'revealed':    [False] * (GRID_SIZE * GRID_SIZE),
-        'mines_count': mines_count,
-        'bet':         bet,
-        'gems_opened': 0,
+        'board':          board,
+        'real_positions': real_positions,
+        'revealed':       [False] * (GRID_SIZE * GRID_SIZE),
+        'mines_count':    mines_count,
+        'bet':            bet,
+        'gems_opened':    0,
+        'exploded_idx':   -1,
     }
     _sessions[user_id] = session
     await state.set_state(MinesGame.playing)
