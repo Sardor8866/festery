@@ -547,14 +547,14 @@ async def show_exact_number_menu(callback: CallbackQuery):
     """Показать меню точного числа"""
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_1", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_2", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_3", icon_custom_emoji_id=EMOJI_DICE)
+            InlineKeyboardButton(text="1️⃣ (x4.7)", callback_data="bet_dice_куб_1"),
+            InlineKeyboardButton(text="2️⃣ (x4.7)", callback_data="bet_dice_куб_2"),
+            InlineKeyboardButton(text="3️⃣ (x4.7)", callback_data="bet_dice_куб_3")
         ],
         [
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_4", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_5", icon_custom_emoji_id=EMOJI_DICE),
-            InlineKeyboardButton(text="(x4.7)", callback_data="bet_dice_куб_6", icon_custom_emoji_id=EMOJI_DICE)
+            InlineKeyboardButton(text="4️⃣ (x4.7)", callback_data="bet_dice_куб_4"),
+            InlineKeyboardButton(text="5️⃣ (x4.7)", callback_data="bet_dice_куб_5"),
+            InlineKeyboardButton(text="6️⃣ (x4.7)", callback_data="bet_dice_куб_6")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="custom_dice_001", icon_custom_emoji_id=EMOJI_BACK)
@@ -696,12 +696,7 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
         await callback.answer("⏳ Дождитесь окончания игры!", show_alert=True)
         return
     
-    balance = betting_game.get_balance(user_id)
-    
-    if balance < MIN_BET:
-        await callback.answer(f"❌ Недостаточно средств! Мин. {MIN_BET} USDT", show_alert=True)
-        return
-    
+    # Убираем проверку баланса здесь - она будет после ввода суммы
     betting_game.pending_bets[user_id] = bet_type
     bet_config = betting_game.get_bet_config(bet_type)
     
@@ -711,6 +706,8 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
     
     await state.set_state(BetStates.waiting_for_amount)
     
+    balance = betting_game.get_balance(user_id)
+    
     markup = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="Отмена", callback_data="cancel_bet", icon_custom_emoji_id=EMOJI_BACK)
     ]])
@@ -719,7 +716,7 @@ async def request_amount(callback: CallbackQuery, state: FSMContext, betting_gam
         f"<b>{bet_config['name']}</b>\n\n"
         f"<i>Введите сумму ставки:</i>\n"
         f"<blockquote>Мин: <code>{MIN_BET} USDT</code>\n"
-        f"Макс: <code>{balance:.2f} USDT</code>\n"
+        f"Макс: <code>{min(MAX_BET, balance):.2f} USDT</code>\n"
         f"Выигрыш: <code>x{bet_config['multiplier']}</code></blockquote>",
         parse_mode='HTML',
         reply_markup=markup
@@ -743,27 +740,34 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
         amount = float(message.text)
         
         if amount < MIN_BET:
-            await message.answer(f"❌ Минимум: {MIN_BET} USDT")
+            await message.answer(f"❌ Минимальная ставка: {MIN_BET} USDT")
             return
         
         if amount > MAX_BET:
-            await message.answer(f"❌ Максимум: {MAX_BET} USDT")
+            await message.answer(f"❌ Максимальная ставка: {MAX_BET} USDT")
             return
             
+        # Проверка баланса ТОЛЬКО ЗДЕСЬ, после ввода суммы
         balance = betting_game.get_balance(user_id)
         if balance < amount:
             await message.answer(
-                f"❌ Недостаточно средств!\n"
-                f"Баланс: <code>{balance:.2f} USDT</code>",
+                f"❌ <b>Недостаточно средств!</b>\n\n"
+                f"💰 Ваш баланс: <code>{balance:.2f} USDT</code>\n"
+                f"💸 Сумма ставки: <code>{amount:.2f} USDT</code>\n\n"
+                f"<i>Пополните баланс в профиле</i>",
                 parse_mode='HTML'
             )
+            # Очищаем pending bet
+            if user_id in betting_game.pending_bets:
+                del betting_game.pending_bets[user_id]
+            await state.clear()
             return
             
         bet_type = betting_game.pending_bets[user_id]
         bet_config = betting_game.get_bet_config(bet_type)
         
         if not bet_config:
-            await message.answer("❌ Ошибка")
+            await message.answer("❌ Ошибка конфигурации ставки")
             if user_id in betting_game.pending_bets:
                 del betting_game.pending_bets[user_id]
             await state.clear()
@@ -771,7 +775,7 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
         
         # Снимаем средства
         if not betting_game.subtract_balance(user_id, amount):
-            await message.answer("❌ Ошибка")
+            await message.answer("❌ Ошибка при снятии средств")
             if user_id in betting_game.pending_bets:
                 del betting_game.pending_bets[user_id]
             await state.clear()
@@ -808,10 +812,10 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
             betting_game.end_game(user_id)
         
     except ValueError:
-        await message.answer("❌ Введите число")
+        await message.answer("❌ Введите корректное число")
     except Exception as e:
         logging.error(f"Error: {e}")
-        await message.answer("❌ Ошибка")
+        await message.answer("❌ Произошла ошибка")
         if user_id in betting_game.pending_bets:
             del betting_game.pending_bets[user_id]
         await state.clear()
