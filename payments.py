@@ -256,10 +256,10 @@ async def check_payment_task(invoice_id: str):
                         await bot.edit_message_text(
                             text=(
                                 f"🎉 <b>Успешное пополнение!</b> ✅\n\n"
-                                f"<pre>"
+                                f"<blockquote>"
                                 f"💎 Сумма: {invoice['amount']} USDT\n"
                                 f"💰 Текущий баланс: {storage.get_balance(invoice['user_id']):.2f} USDT"
-                                f"</pre>\n\n"
+                                f"</blockquote>\n\n"
                                 f"✨ Средства уже доступны для вывода!"
                             ),
                             parse_mode=ParseMode.HTML,
