@@ -34,7 +34,8 @@ from tower import (
 # Импортируем реферальный модуль
 from referrals import (
     referral_router, referral_storage,
-    setup_referrals, process_start_referral
+    setup_referrals, process_start_referral,
+    ReferralWithdraw, ref_withdraw_amount
 )
 
 # Настройки
@@ -78,7 +79,7 @@ GAME_CALLBACKS = {
 WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
 
 # ID администраторов
-ADMIN_IDS = [8118184388]  # <- замени на свой ID
+ADMIN_IDS = [8118184388]
 
 # Роутер
 router = Router()
@@ -211,11 +212,9 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
-        # ── Проверяем реферальный параметр ──────────────────────────────
         args = message.text.split(maxsplit=1)
         if len(args) > 1 and args[1].startswith("ref_"):
             await process_start_referral(message, args[1])
-        # ────────────────────────────────────────────────────────────────
 
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
@@ -423,12 +422,18 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     current_state = await state.get_state()
 
-    # Ставка в игре Мины (ввод суммы через FSM)
+    # ── ПЕРВЫМ: вывод реферального баланса ─────────────────────────────
+    if current_state == ReferralWithdraw.entering_amount.state:
+        await ref_withdraw_amount(message, state)
+        return
+    # ───────────────────────────────────────────────────────────────────
+
+    # Ставка в игре Мины
     if current_state == MinesGame.choosing_bet:
         await process_mines_bet(message, state, storage)
         return
 
-    # Ставка в игре Башня (ввод суммы через FSM)
+    # Ставка в игре Башня
     if current_state == TowerGame.choosing_bet:
         await process_tower_bet(message, state, storage)
         return
@@ -513,12 +518,6 @@ async def main():
 
     betting_game = BettingGame(bot)
 
-    # Порядок роутеров важен:
-    # 1. router         — основной (FSM ставки, мины, башня, навигация)
-    # 2. mines_router   — обработчики кнопок игры мины
-    # 3. tower_router   — обработчики кнопок игры башня
-    # 4. referral_router— реферальная система
-    # 5. payment_router — числа без FSM (депозит/вывод)
     dp.include_router(router)
     dp.include_router(mines_router)
     dp.include_router(tower_router)
@@ -526,7 +525,7 @@ async def main():
     dp.include_router(payment_router)
 
     setup_payments(bot)
-    setup_referrals(bot)   # ← инициализация реферального модуля
+    setup_referrals(bot)
 
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
