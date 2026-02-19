@@ -220,7 +220,7 @@ def game_text(session: dict) -> str:
     return (
         f"<blockquote><b>💣 Мины</b></blockquote>\n\n"
         f"<blockquote>"
-        f"💰 Ставка: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Ставка: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
         f"💣 Мин: <b>{mines}</b>\n"
         f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b>x{mult}</b>\n"
         f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b>x{next_mult}</b>\n"
@@ -494,9 +494,7 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         for i, mv in enumerate(mults):
             mult_lines += f"  Гем {i+1}: <b>x{mv}</b>\n"
         await message.answer(
-            f"<blockquote>💣 Мин: <b>{m}</b> | Гемов: <b>{total_safe}</b></blockquote>\n\n"
-            f"<blockquote><b>Множители:</b>\n{mult_lines}</blockquote>\n\n"
-            f"Введите сумму ставки:",
+            f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Назад", callback_data="mines_back_select", icon_custom_emoji_id=EMOJI_BACK)
@@ -515,14 +513,13 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         return
 
     if bet <= 0:
-        await message.answer("❌ Ставка должна быть больше 0.")
+        await message.answer("❌ Ставка должна быть больше 0")
         return
 
     balance = storage.get_balance(user_id)
     if bet > balance:
         await message.answer(
-            f"<blockquote><b>❌ Недостаточно средств!</b></blockquote>\n\n"
-            f"<blockquote>💰 Баланс: <code>{balance:.2f}</code></blockquote>",
+            f"<blockquote><b>❌ Недостаточно средств!</b></blockquote>\n\n",
             parse_mode=ParseMode.HTML
         )
         return
