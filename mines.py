@@ -8,6 +8,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
+# Реферальная система
+try:
+    from referrals import notify_referrer_commission
+except ImportError:
+    async def notify_referrer_commission(user_id: int, bet_amount: float):
+        pass
+
 # ========== EMOJI IDS ==========
 EMOJI_BACK   = "5906771962734057347"
 EMOJI_GOAL   = "5206607081334906820"
@@ -645,6 +652,9 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
 
     storage.deduct_balance(user_id, bet)
 
+    # ✅ Начисляем реферальную комиссию (2% от ставки)
+    asyncio.create_task(notify_referrer_commission(user_id, bet))
+
     session = _create_session(mines_count, bet, message.chat.id)
     _sessions[user_id] = session
     await state.set_state(MinesGame.playing)
@@ -736,6 +746,9 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         return
 
     storage.deduct_balance(user_id, bet)
+
+    # ✅ Начисляем реферальную комиссию (2% от ставки)
+    asyncio.create_task(notify_referrer_commission(user_id, bet))
 
     session = _create_session(mines_count, bet, message.chat.id)
     _sessions[user_id] = session
