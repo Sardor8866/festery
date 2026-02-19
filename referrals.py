@@ -27,9 +27,7 @@ EMOJI_STATS      = "5197288647275071607"
 EMOJI_COIN       = "5197434882321567830"
 EMOJI_CHECK      = "5197269100878907942"
 EMOJI_NUMBER     = "5456140674028019486"
-
-# Эмодзи перед каждым рефералом в списке — замени ID на свои
-EMOJI_REF_USER   = "5906581476639513176"   # 👤 замени на нужный
+EMOJI_REF_USER   = "5906581476639513176"   # замени на нужный
 
 
 # ──────────────────────────────────────────────
@@ -253,14 +251,12 @@ def text_ref_stats(user_id: int) -> str:
     stats = referral_storage.get_stats(user_id)
     refs  = stats["referrals_list"]
 
-    # Последние 5 рефералов (самые новые сверху)
     last_5 = list(reversed(refs[-5:])) if refs else []
-
     lines = [
         f"{e(EMOJI_REF_USER,'👤')} <code>{uid}</code>"
         for uid in last_5
     ]
-    refs_block = "\n".join(lines) if lines else f"  <i>Рефералов пока нет</i>"
+    refs_block = "\n".join(lines) if lines else "  <i>Рефералов пока нет</i>"
     more = f"\n{e(EMOJI_STATS,'📊')} <i>... и ещё {len(refs) - 5}</i>" if len(refs) > 5 else ""
 
     return (
@@ -334,15 +330,8 @@ async def ref_link(callback: CallbackQuery, state: FSMContext):
 
 @referral_router.callback_query(F.data == "ref_withdraw")
 async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
+    # ── Проверки баланса УБРАНЫ — ошибка покажется после ввода суммы ──
     ref_balance = referral_storage.get_ref_balance(callback.from_user.id)
-
-    if ref_balance < MIN_REF_WITHDRAWAL:
-        await callback.answer(
-            f"❌ Минимум для вывода: {MIN_REF_WITHDRAWAL} USDT\n"
-            f"Ваш баланс: {ref_balance:.4f} USDT",
-            show_alert=True
-        )
-        return
 
     await state.set_state(ReferralWithdraw.entering_amount)
     await callback.message.edit_text(
@@ -427,7 +416,6 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
     logging.info(f"[Referral] {message.from_user.id} вывел {amount} USDT с реф-баланса")
 
 
-# Регистрируем хендлер в роутере тоже
 @referral_router.message(ReferralWithdraw.entering_amount, F.text)
 async def ref_withdraw_amount_handler(message: Message, state: FSMContext):
     await ref_withdraw_amount(message, state)
