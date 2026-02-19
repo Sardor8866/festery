@@ -368,7 +368,7 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     storage.set_pending(callback.from_user.id, 'deposit')
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
-        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму пополнения:</i></blockquote>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму пополнения:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -376,26 +376,19 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
 
 
 # ========== ВЫВОД ==========
+# ── Проверки баланса и кулдауна УБРАНЫ с кнопки — ошибка будет после ввода суммы ──
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     balance = sync_balances(callback.from_user.id)
-
-    if balance < MIN_WITHDRAWAL:
-        await callback.answer(f"❌ Минимум для вывода: {MIN_WITHDRAWAL} USDT", show_alert=True)
-        return
-
-    can_withdraw, wait_time = storage.can_withdraw(callback.from_user.id)
-    if not can_withdraw:
-        minutes = wait_time // 60
-        seconds = wait_time % 60
-        await callback.answer(f"⏳ Подождите {minutes} мин {seconds} сек", show_alert=True)
-        return
-
     storage.set_pending(callback.from_user.id, 'withdraw')
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji>Введите сумму вывода:</i></blockquote>",
+        f"<blockquote>"
+        f"<tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Доступно: <code>{balance:.2f} USDT</code>\n"
+        f"💸 Минимум: <code>{MIN_WITHDRAWAL:.2f} USDT</code>"
+        f"</blockquote>\n\n"
+        f"<i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму вывода:</i>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
@@ -404,13 +397,11 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
 
 # ========== ТЕКСТОВЫЕ СООБЩЕНИЯ ==========
 
-# Команда /mines с аргументами
 @router.message(F.text.regexp(r'(?i)^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$'))
 async def mines_command_handler(message: Message, state: FSMContext):
     await process_mines_command(message, state, storage)
 
 
-# Команда /tower с аргументами
 @router.message(F.text.regexp(r'(?i)^(?:/)?(?:tower|башня)\s+[\d.,]+\s+\d+$'))
 async def tower_command_handler(message: Message, state: FSMContext):
     await process_tower_command(message, state, storage)
@@ -438,7 +429,7 @@ async def handle_text_message(message: Message, state: FSMContext):
         await process_tower_bet(message, state, storage)
         return
 
-    # Команды ставок (не числа)
+    # Команды ставок
     if is_bet_command(message.text):
         await handle_text_bet_command(message, betting_game)
         return
@@ -510,11 +501,9 @@ async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp  = Dispatcher(storage=MemoryStorage())
 
-    # ── Получаем username бота для реферальных ссылок ──────────────────
     bot_info = await bot.get_me()
     os.environ["BOT_USERNAME"] = bot_info.username
     logging.info(f"Бот запущен как @{bot_info.username}")
-    # ───────────────────────────────────────────────────────────────────
 
     betting_game = BettingGame(bot)
 
