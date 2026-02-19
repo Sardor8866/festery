@@ -27,6 +27,18 @@ EMOJI_BACK = "5906771962734057347"
 EMOJI_SUCCESS = "5199436362280976367"
 EMOJI_ERROR = "5197923386472879129"
 EMOJI_LINK = "5271604874419647061"
+EMOJI_MONEY = "5906771962734057347"
+EMOJI_WALLET = "5906771962734057347"
+EMOJI_CLOCK = "5906771962734057347"
+EMOJI_CHECK = "5906771962734057347"
+EMOJI_CROSS = "5906771962734057347"
+EMOJI_BANK = "5906771962734057347"
+EMOJI_ARROW = "5906771962734057347"
+EMOJI_STAR = "5906771962734057347"
+EMOJI_FIRE = "5906771962734057347"
+EMOJI_GEM = "5906771962734057347"
+EMOJI_ROCKET = "5906771962734057347"
+EMOJI_PARTY = "5906771962734057347"
 
 payment_router = Router()
 bot: Bot = None
@@ -242,15 +254,22 @@ async def check_payment_task(invoice_id: str):
                     try:
                         await bot.edit_message_text(
                             text=(
-                                f"✅ <b>Оплата получена!</b>\n\n"
-                                f"Сумма <b>{invoice['amount']} USDT</b> зачислена на ваш баланс.\n"
-                                f"Текущий баланс: <b>{storage.get_balance(invoice['user_id']):.2f} USDT</b>"
+                                f"<tg-emoji emoji-id=\"{EMOJI_PARTY}\">🎉</tg-emoji> <b>Успешное пополнение!</b> <tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji>\n\n"
+                                f"<blockquote>"
+                                f"💎 <b>Сумма:</b> <code>{invoice['amount']} USDT</code>\n"
+                                f"💰 <b>Текущий баланс:</b> <code>{storage.get_balance(invoice['user_id']):.2f} USDT</code>\n"
+                                f"</blockquote>\n\n"
+                                f"<tg-emoji emoji-id=\"{EMOJI_GEM}\">✨</tg-emoji> Средства уже доступны для вывода!"
                             ),
                             parse_mode=ParseMode.HTML,
                             chat_id=invoice['chat_id'],
                             message_id=invoice['message_id'],
                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                                InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")
+                                InlineKeyboardButton(
+                                    text="◀️ В профиль", 
+                                    callback_data="profile",
+                                    icon_custom_emoji_id=EMOJI_BACK
+                                )
                             ]])
                         )
                         logging.info(f"[{invoice_id}] Сообщение обновлено успешно")
@@ -392,17 +411,29 @@ async def _process_withdraw(message: Message, user_id: int):
         storage.deduct_balance(user_id, amount)
         storage.set_last_withdrawal(user_id)
 
+        # Обновленное сообщение для вывода
         await message.answer(
             text=(
-                f"<b>Чек создан!</b>\n\n"
-                f"Сумма: <b>{amount} USDT</b>\n"
-                f"Новый баланс: <b>{storage.get_balance(user_id):.2f} USDT</b>\n\n"
-                f"Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
+                f"<tg-emoji emoji-id=\"{EMOJI_ROCKET}\">🚀</tg-emoji> <b>Чек успешно создан!</b> <tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji>\n\n"
+                f"<blockquote>"
+                f"💎 <b>Сумма:</b> <code>{amount} USDT</code>\n"
+                f"💰 <b>Списано с баланса:</b> <code>{amount} USDT</code>\n"
+                f"💵 <b>Остаток на балансе:</b> <code>{storage.get_balance(user_id):.2f} USDT</code>\n"
+                f"</blockquote>\n\n"
+                f"<tg-emoji emoji-id=\"{EMOJI_GEM}\">✨</tg-emoji> Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💸 Получить чек", url=check['bot_check_url'])],
-                [InlineKeyboardButton(text="◀️ В профиль", callback_data="profile")]
+                [InlineKeyboardButton(
+                    text="💸 Получить чек", 
+                    url=check['bot_check_url'],
+                    icon_custom_emoji_id=EMOJI_LINK
+                )],
+                [InlineKeyboardButton(
+                    text="◀️ В профиль", 
+                    callback_data="profile",
+                    icon_custom_emoji_id=EMOJI_BACK
+                )]
             ])
         )
 
