@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
@@ -22,7 +23,7 @@ from game import (
 
 # Импортируем модуль Мины
 from mines import (
-    mines_router, MinesGame, show_mines_menu, process_mines_bet
+    mines_router, MinesGame, show_mines_menu, process_mines_bet, process_mines_command
 )
 
 # Настройки
@@ -65,9 +66,9 @@ GAME_CALLBACKS = {
 # File ID для приветственного стикера
 WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6lNRCGaKqt5OgQ"
 
-
-# ID администраторов — добавь свой Telegram ID
+# ID администраторов
 ADMIN_IDS = [8118184388]  # <- замени на свой ID
+
 # Роутер
 router = Router()
 
@@ -239,12 +240,10 @@ async def cmd_add_balance(message: Message):
         await message.answer("❌ Сумма должна быть больше 0.")
         return
 
-    # Создаём пользователя если нет
     storage.get_user(target_id)
     storage.add_balance(target_id, amount)
     new_balance = storage.get_balance(target_id)
 
-    # Синхронизируем с game
     if betting_game:
         betting_game.user_balances[target_id] = new_balance
         betting_game.save_balances()
@@ -380,12 +379,20 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
 
 
 # ========== ТЕКСТОВЫЕ СООБЩЕНИЯ ==========
+
+# Хендлер для команды /mines и mines с аргументами (с флешом и без)
+@router.message(F.text.regexp(r'^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$', re.IGNORECASE))
+async def mines_command_handler(message: Message, state: FSMContext):
+    await process_mines_command(message, state, storage)
+
+
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
 
-    # Ставка в игре Мины (ввод суммы)
     current_state = await state.get_state()
+
+    # Ставка в игре Мины (ввод суммы через FSM)
     if current_state == MinesGame.choosing_bet:
         await process_mines_bet(message, state, storage)
         return
