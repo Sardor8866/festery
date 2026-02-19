@@ -414,7 +414,7 @@ async def _process_withdraw(message: Message, user_id: int):
                 f"<blockquote><tg-emoji emoji-id=\"5312441427764989435\">💰</tg-emoji><b>Вывод обработан!</b>✅</blockquote>\n\n"
                 f"<blockquote>"
                 f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма:<code> {amount}</code>\n"
-                f"💰 Списано с баланса: {amount} USDT\n"
+                f"<tg-emoji emoji-id=\"5444856076954520455\">💰</tg-emoji>Списано!: <code>{amount}</code><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
                 f"<tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: <code>{storage.get_balance(user_id):.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>"
                 f"</blockquote>\n\n"
             ),
