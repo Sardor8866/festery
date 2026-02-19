@@ -26,6 +26,11 @@ from mines import (
     mines_router, MinesGame, show_mines_menu, process_mines_bet, process_mines_command
 )
 
+# Импортируем модуль Башня
+from tower import (
+    tower_router, TowerGame, show_tower_menu, process_tower_bet, process_tower_command
+)
+
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
 WEBHOOK_PATH = "/webhook"
@@ -121,7 +126,8 @@ def get_games_menu():
             InlineKeyboardButton(text="🎳 Боулинг", callback_data=GAME_CALLBACKS['bowling'])
         ],
         [
-            InlineKeyboardButton(text="💣 Мины", callback_data="mines_menu")
+            InlineKeyboardButton(text="💣 Мины", callback_data="mines_menu"),
+            InlineKeyboardButton(text="🏰 Башня", callback_data="tower_menu")
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
@@ -297,6 +303,13 @@ async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
     await show_mines_menu(callback, storage, betting_game)
 
 
+# ========== БАШНЯ — ВХОД ==========
+@router.callback_query(F.data == "tower_menu")
+async def tower_menu_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await show_tower_menu(callback, storage, betting_game)
+
+
 # ========== ОСТАЛЬНЫЕ ИГРЫ ==========
 @router.callback_query(F.data == GAME_CALLBACKS['dice'])
 async def dice_menu(callback: CallbackQuery, state: FSMContext):
@@ -380,10 +393,16 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
 
 # ========== ТЕКСТОВЫЕ СООБЩЕНИЯ ==========
 
-# Хендлер для команды /mines и mines с аргументами (с флешом и без)
+# Команда /mines с аргументами
 @router.message(F.text.regexp(r'(?i)^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$'))
 async def mines_command_handler(message: Message, state: FSMContext):
     await process_mines_command(message, state, storage)
+
+
+# Команда /tower с аргументами
+@router.message(F.text.regexp(r'(?i)^(?:/)?(?:tower|башня)\s+[\d.,]+\s+\d+$'))
+async def tower_command_handler(message: Message, state: FSMContext):
+    await process_tower_command(message, state, storage)
 
 
 @router.message(F.text)
@@ -395,6 +414,11 @@ async def handle_text_message(message: Message, state: FSMContext):
     # Ставка в игре Мины (ввод суммы через FSM)
     if current_state == MinesGame.choosing_bet:
         await process_mines_bet(message, state, storage)
+        return
+
+    # Ставка в игре Башня (ввод суммы через FSM)
+    if current_state == TowerGame.choosing_bet:
+        await process_tower_bet(message, state, storage)
         return
 
     # Команды ставок (не числа)
@@ -488,11 +512,13 @@ async def main():
     betting_game = BettingGame(bot)
 
     # Порядок роутеров важен:
-    # 1. router — основной (FSM ставки, мины, навигация)
+    # 1. router       — основной (FSM ставки, мины, башня, навигация)
     # 2. mines_router — обработчики кнопок игры мины
-    # 3. payment_router — числа без FSM (депозит/вывод)
+    # 3. tower_router — обработчики кнопок игры башня
+    # 4. payment_router — числа без FSM (депозит/вывод)
     dp.include_router(router)
     dp.include_router(mines_router)
+    dp.include_router(tower_router)
     dp.include_router(payment_router)
 
     setup_payments(bot)
