@@ -18,11 +18,13 @@ FLOORS = 6           # кол-во этажей
 CELLS  = 5           # кол-во кликабельных ячеек на этаж
 INACTIVITY_TIMEOUT = 300  # 5 минут
 
-CELL_LOCKED  = "⬜"   # будущие этажи
-CELL_CLOSED  = "🌑"   # нераскрытая ячейка текущего/прошлого этажа
-CELL_GEM     = "💎"   # безопасная выбранная ячейка
-CELL_BOMB    = "💣"   # бомба (показывается при проигрыше)
-CELL_EXPLODE = "💥"   # ячейка на которую нажали и попали на бомбу
+CELL_FUTURE      = "🔒"   # этаж ещё не достигнут (заблокирован)
+CELL_ACTIVE      = "🔵"   # активная ячейка текущего этажа (кликабельна)
+CELL_CHOSEN_SAFE = "💎"   # выбранная безопасная ячейка пройденного этажа
+CELL_OTHER_SAFE  = "⬜"   # другие безопасные ячейки пройденного этажа
+CELL_SAFE_REVEAL = "🟩"   # безопасная ячейка (раскрывается после проигрыша)
+CELL_BOMB        = "💣"   # бомба (раскрывается после проигрыша)
+CELL_EXPLODE     = "💥"   # ячейка на которую нажали и попали на бомбу
 
 # difficulty_id -> кол-во бомб на каждом этаже
 DIFFICULTY_BOMBS = {1: 1, 2: 2, 3: 3, 4: 4}
@@ -190,40 +192,41 @@ def build_tower_keyboard(session: dict, game_over: bool = False) -> InlineKeyboa
             callback_data="tower_noop"
         ))
 
-        if floor_idx < current_floor:
-            # Пройденный этаж — показываем результат
+        if game_over:
+            # ===== РЕЖИМ ПРОИГРЫША: полное раскрытие ВСЕХ этажей =====
             for col in range(CELLS):
-                if col == chosen:
-                    text = CELL_GEM   # безопасная выбранная
+                is_bomb = col in bomb_cols
+                if col == chosen and is_bomb:
+                    text = CELL_EXPLODE      # игрок нажал на бомбу
+                elif is_bomb:
+                    text = CELL_BOMB         # остальные бомбы
+                elif col == chosen:
+                    text = CELL_CHOSEN_SAFE  # выбранная безопасная (пройденные этажи)
                 else:
-                    text = CELL_CLOSED
+                    text = CELL_SAFE_REVEAL  # пустая безопасная ячейка
                 btn_row.append(InlineKeyboardButton(text=text, callback_data="tower_noop"))
 
-        elif floor_idx == current_floor and not game_over:
-            # Активный этаж — кликабельные ячейки
+        elif floor_idx < current_floor:
+            # ===== ПРОЙДЕННЫЙ ЭТАЖ =====
+            for col in range(CELLS):
+                if col == chosen:
+                    text = CELL_CHOSEN_SAFE  # 💎 выбранная ячейка
+                else:
+                    text = CELL_OTHER_SAFE   # ⬜ остальные (были безопасными)
+                btn_row.append(InlineKeyboardButton(text=text, callback_data="tower_noop"))
+
+        elif floor_idx == current_floor:
+            # ===== АКТИВНЫЙ ЭТАЖ: кликабельные ячейки =====
             for col in range(CELLS):
                 btn_row.append(InlineKeyboardButton(
-                    text=CELL_CLOSED,
+                    text=CELL_ACTIVE,
                     callback_data=f"tower_cell_{floor_idx}_{col}"
                 ))
 
-        elif floor_idx == current_floor and game_over:
-            # Взорванный этаж — показываем где была бомба
-            for col in range(CELLS):
-                if col == chosen and col in bomb_cols:
-                    text = CELL_EXPLODE     # попал на бомбу
-                elif col in bomb_cols:
-                    text = CELL_BOMB        # другие бомбы
-                elif col == chosen:
-                    text = CELL_GEM
-                else:
-                    text = CELL_CLOSED
-                btn_row.append(InlineKeyboardButton(text=text, callback_data="tower_noop"))
-
         else:
-            # Будущий этаж — заблокирован
+            # ===== БУДУЩИЙ ЭТАЖ: заблокирован =====
             for col in range(CELLS):
-                btn_row.append(InlineKeyboardButton(text=CELL_LOCKED, callback_data="tower_noop"))
+                btn_row.append(InlineKeyboardButton(text=CELL_FUTURE, callback_data="tower_noop"))
 
         rows.append(btn_row)
 
