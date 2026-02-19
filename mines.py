@@ -102,12 +102,29 @@ async def _inactivity_watcher(user_id: int, bot: Bot, storage):
         storage.add_balance(user_id, bet)
         logging.info(f"[mines] Таймаут user={user_id}, ставка {bet} возвращена.")
 
-    # Удаляем сообщение с игрой
+    # Обновляем сообщение — «Игра закрыта»
     msg_id  = session.get('message_id')
     chat_id = session.get('chat_id')
     if msg_id and chat_id:
         try:
-            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=(
+                    "<blockquote><b>⏰ Игра закрыта</b></blockquote>\n\n"
+                    "<blockquote>"
+                    "💣 Мины\n"
+                    f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>"
+                    f"Ставка <code>{bet}</code>"
+                    "<tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji> возвращена\n"
+                    "</blockquote>\n\n"
+                    "<blockquote><i>Игра завершена по таймауту (5 минут бездействия).</i></blockquote>"
+                ),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="💣 Играть снова", callback_data="mines_menu")
+                ]])
+            )
         except Exception:
             pass
 
