@@ -1,4 +1,5 @@
 import random
+import re
 import logging
 from aiogram import Router, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
@@ -15,8 +16,6 @@ EMOJI_NUMBER = "5456140674028019486"
 GRID_SIZE = 5  # 5x5 = 25 клеток
 
 # ========== СКРЫТЫЕ МИНЫ ==========
-# Реальное кол-во мин на поле = mines_count + HIDDEN_MINES[mines_count]
-# При проигрыше показываем только mines_count мин (без скрытых)
 HIDDEN_MINES = {
     2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 2, 10: 2,
     11: 3, 12: 3, 13: 3, 14: 3, 15: 3, 16: 3,
@@ -24,12 +23,10 @@ HIDDEN_MINES = {
     22: 1, 23: 0, 24: 0,
 }
 
-
-# Эмодзи ячеек — обычные, без кастомных (в тексте кнопки)
-CELL_CLOSED  = "🌑"   # закрытая, не открытая
-CELL_GEM     = "💎"   # открытый гем
-CELL_MINE    = "💣"   # мина (показывается после проигрыша)
-CELL_EXPLODE = "💥"   # мина на которую нажали
+CELL_CLOSED  = "🌑"
+CELL_GEM     = "💎"
+CELL_MINE    = "💣"
+CELL_EXPLODE = "💥"
 
 # ========== МНОЖИТЕЛИ ==========
 MINES_MULTIPLIERS = {
@@ -88,18 +85,12 @@ def get_next_mult(mines_count: int, gems_opened: int) -> float:
 
 
 def generate_board(mines_count: int) -> tuple:
-    """Возвращает (board, real_mine_positions)
-    board — 25 клеток, True = мина (включая скрытые)
-    real_mine_positions — set позиций ТОЛЬКО реальных мин (без скрытых)
-    """
     hidden = HIDDEN_MINES.get(mines_count, 0)
     total_mines = mines_count + hidden
-    total_mines = min(total_mines, GRID_SIZE * GRID_SIZE - 1)  # защита
+    total_mines = min(total_mines, GRID_SIZE * GRID_SIZE - 1)
 
     all_positions = random.sample(range(GRID_SIZE * GRID_SIZE), total_mines)
-    # Первые mines_count — реальные, остальные — скрытые
     real_positions = set(all_positions[:mines_count])
-    hidden_positions = set(all_positions[mines_count:])
 
     board = [False] * (GRID_SIZE * GRID_SIZE)
     for pos in all_positions:
@@ -116,27 +107,23 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
     for row in range(GRID_SIZE):
         btn_row = []
         for col in range(GRID_SIZE):
-            idx     = row * GRID_SIZE + col
-            is_mine = board[idx]
-            is_open = revealed[idx]
+            idx      = row * GRID_SIZE + col
+            is_mine  = board[idx]
+            is_open  = revealed[idx]
 
             real_positions = session.get('real_positions', set())
-            is_real_mine = idx in real_positions
+            is_real_mine   = idx in real_positions
 
             if is_open:
                 if is_mine and is_real_mine:
-                    # Игрок нажал на реальную мину — взрыв
                     text = CELL_EXPLODE
                 else:
-                    # Открытый гем ИЛИ скрытая мина (показываем как алмаз)
                     text = CELL_GEM
                 cb = "mines_noop"
             elif game_over and is_real_mine:
-                # После проигрыша — только реальные мины показываем как мины
                 text = CELL_MINE
                 cb   = "mines_noop"
             elif game_over:
-                # Скрытые мины и безопасные клетки — алмазы
                 text = CELL_GEM
                 cb   = "mines_noop"
             else:
@@ -146,7 +133,6 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
             btn_row.append(InlineKeyboardButton(text=text, callback_data=cb))
         rows.append(btn_row)
 
-    # Управляющие кнопки
     if not game_over:
         gems    = session.get('gems_opened', 0)
         mult    = get_multiplier(session['mines_count'], gems)
@@ -182,14 +168,13 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
 
 
 def build_mines_select_keyboard() -> InlineKeyboardMarkup:
+    # Кнопки только с количеством мин, без множителей
     presets = [2, 5, 10, 15, 18]
     row = []
     for m in presets:
-        first = MINES_MULTIPLIERS[m][0]
         row.append(InlineKeyboardButton(
-            text=f"{m}  x{first}",
+            text=f"💣 {m}",
             callback_data=f"mines_select_{m}",
-            icon_custom_emoji_id=EMOJI_NUMBER
         ))
     return InlineKeyboardMarkup(inline_keyboard=[
         row,
@@ -255,15 +240,8 @@ async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
     await state.update_data(mines_count=mines_count)
     await state.set_state(MinesGame.choosing_bet)
 
-    mults      = MINES_MULTIPLIERS[mines_count]
-    total_safe = GRID_SIZE * GRID_SIZE - mines_count
-
-    mult_lines = ""
-    for i, m in enumerate(mults):
-        mult_lines += f"  Гем {i+1}: <b>x{m}</b>\n"
-
     text = f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>"
-    
+
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
@@ -287,11 +265,10 @@ async def mines_back_select(callback: CallbackQuery, state: FSMContext):
 
 @mines_router.callback_query(F.data == "mines_manual")
 async def mines_manual_handler(callback: CallbackQuery, state: FSMContext):
-    """Ввод количества мин вручную"""
     await state.update_data(mines_count=None, waiting_manual=True)
     await state.set_state(MinesGame.choosing_bet)
     await callback.message.edit_text(
-        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите количество мин:</b></blockquote>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите количество мин (от 2 до 24):</b></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
@@ -318,7 +295,6 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     _sessions.pop(user_id, None)
     await state.clear()
-    sync_balances = getattr(callback.message, '_sync_balances', None)
     balance = pay_storage.get_balance(user_id)
     from main import get_games_menu, get_games_menu_text
     await callback.message.edit_text(
@@ -357,11 +333,7 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         bet            = session['bet']
         real_positions = session.get('real_positions', set())
 
-        # Если нажал на СКРЫТУЮ мину — убираем одну реальную из показа
-        # чтобы на экране всегда было ровно mines_count мин
         if idx not in real_positions:
-            # Скрытая мина — добавляем idx в real_positions вместо одной реальной
-            # Убираем случайную реальную мину (она станет алмазом)
             if real_positions:
                 remove_one = random.choice(list(real_positions))
                 real_positions = (real_positions - {remove_one}) | {idx}
@@ -372,14 +344,14 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
 
         balance = pay_storage.get_balance(user_id)
         await callback.message.edit_text(
-        f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы попали на мину!</b></blockquote>\n\n"
-        f"<blockquote>"
-        f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Баланс: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
-        f"</blockquote>\n\n"
-        f"<blockquote><b><i>Вы проиграли ставку! Это не повод сдаваться!</i></b></blockquote>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=build_game_keyboard(session, game_over=True)
+            f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы попали на мину!</b></blockquote>\n\n"
+            f"<blockquote>"
+            f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+            f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Баланс: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+            f"</blockquote>\n\n"
+            f"<blockquote><b><i>Вы проиграли ставку! Это не повод сдаваться!</i></b></blockquote>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_game_keyboard(session, game_over=True)
         )
         await callback.answer("💥Мина!")
     else:
@@ -449,8 +421,8 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
         f"<blockquote><b><tg-emoji emoji-id=\"5312441427764989435\">🎰</tg-emoji>Кэшаут!</b></blockquote>\n\n"
         f"<blockquote>"
         f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
-                f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-                f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+        f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
         f"</blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -469,12 +441,12 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
     await callback.answer(f"💰+{winnings}!")
 
 
-# ========== ОБРАБОТКА СТАВКИ (вызов из main.py) ==========
+# ========== ОБРАБОТКА СТАВКИ (вызов из main.py через FSM) ==========
 
 async def process_mines_bet(message: Message, state: FSMContext, storage):
     user_id = message.from_user.id
     data    = await state.get_data()
-    mines_count  = data.get('mines_count')
+    mines_count    = data.get('mines_count')
     waiting_manual = data.get('waiting_manual', False)
 
     # Шаг 1: ждём ввод кол-ва мин вручную
@@ -488,11 +460,6 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
             await message.answer("❌ Число мин должно быть от 2 до 24.")
             return
         await state.update_data(mines_count=m, waiting_manual=False)
-        mults = MINES_MULTIPLIERS[m]
-        total_safe = GRID_SIZE * GRID_SIZE - m
-        mult_lines = ""
-        for i, mv in enumerate(mults):
-            mult_lines += f"  Гем {i+1}: <b>x{mv}</b>\n"
         await message.answer(
             f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>",
             parse_mode="HTML",
@@ -512,6 +479,14 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         await message.answer("Введите корректную сумму ставки.")
         return
 
+    if bet < 0.1:
+        await message.answer("❌ Минимальная ставка: 0.1")
+        return
+
+    if bet > 10000:
+        await message.answer("❌ Максимальная ставка: 10000")
+        return
+
     if bet <= 0:
         await message.answer("❌ Ставка должна быть больше 0")
         return
@@ -524,6 +499,101 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         )
         return
 
+    storage.deduct_balance(user_id, bet)
+
+    board, real_positions = generate_board(mines_count)
+    session = {
+        'board':          board,
+        'real_positions': real_positions,
+        'revealed':       [False] * (GRID_SIZE * GRID_SIZE),
+        'mines_count':    mines_count,
+        'bet':            bet,
+        'gems_opened':    0,
+        'exploded_idx':   -1,
+    }
+    _sessions[user_id] = session
+    await state.set_state(MinesGame.playing)
+
+    await message.answer(
+        game_text(session),
+        parse_mode=ParseMode.HTML,
+        reply_markup=build_game_keyboard(session)
+    )
+
+
+# ========== ОБРАБОТКА КОМАНДЫ /mines (вызов из main.py) ==========
+
+async def process_mines_command(message: Message, state: FSMContext, storage):
+    """
+    Обрабатывает команды:
+      /mines 0.3 5
+      mines 0.3 5
+      /мины 0.3 5
+      мины 0.3 5
+    """
+    text = message.text.strip()
+    pattern = r'^(?:/)?(?:mines|мины)\s+([\d.,]+)\s+(\d+)$'
+    match = re.match(pattern, text, re.IGNORECASE)
+
+    if not match:
+        await message.answer(
+            "<blockquote><b>❌ Неверный формат!</b></blockquote>\n\n"
+            "<blockquote>Используйте:\n"
+            "<code>/mines [ставка] [мины]</code>\n\n"
+            "Примеры:\n"
+            "<code>/mines 0.3 5</code>\n"
+            "<code>mines 1.5 10</code>\n"
+            "<code>/мины 0.5 13</code></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    try:
+        bet = float(match.group(1).replace(',', '.'))
+        mines_count = int(match.group(2))
+    except ValueError:
+        await message.answer("❌ Неверный формат чисел.")
+        return
+
+    # Валидация мин
+    if mines_count < 2 or mines_count > 24:
+        await message.answer(
+            "<blockquote><b>❌ Количество мин должно быть от 2 до 24.</b></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # Валидация ставки
+    if bet < 0.1:
+        await message.answer(
+            "<blockquote><b>❌ Минимальная ставка: 0.1</b></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    if bet > 10000:
+        await message.answer(
+            "<blockquote><b>❌ Максимальная ставка: 10 000</b></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    user_id = message.from_user.id
+    balance = storage.get_balance(user_id)
+
+    if bet > balance:
+        await message.answer(
+            f"<blockquote><b>❌ Недостаточно средств!</b>\n"
+            f"Баланс: <code>{balance:.2f}</code></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # Если уже идёт игра — завершаем старую (ставка теряется)
+    if user_id in _sessions:
+        _sessions.pop(user_id)
+
+    # Списываем ставку и создаём игру
     storage.deduct_balance(user_id, bet)
 
     board, real_positions = generate_board(mines_count)
