@@ -460,7 +460,7 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
                 icon_custom_emoji_id=EMOJI_3POINT
             )],
             [InlineKeyboardButton(
-                text="Игры",
+                text="Выйти",
                 callback_data="games",
                 icon_custom_emoji_id=EMOJI_BACK
             )],
