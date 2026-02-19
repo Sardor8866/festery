@@ -10,6 +10,13 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple
 
+# Реферальная система
+try:
+    from referrals import notify_referrer_commission
+except ImportError:
+    async def notify_referrer_commission(user_id: int, bet_amount: float):
+        pass
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -471,7 +478,10 @@ async def handle_text_bet_command(message: Message, betting_game: BettingGame):
     if not betting_game.subtract_balance(user_id, amount):
         await message.answer("❌ Ошибка при снятии средств")
         return
-    
+
+    # ✅ Начисляем реферальную комиссию (2% от ставки)
+    asyncio.create_task(notify_referrer_commission(user_id, amount))
+
     # Получаем никнейм
     nickname = message.from_user.first_name or ""
     if message.from_user.last_name:
@@ -754,7 +764,10 @@ async def process_bet_amount(message: Message, state: FSMContext, betting_game: 
                 del betting_game.pending_bets[user_id]
             await state.clear()
             return
-        
+
+        # ✅ Начисляем реферальную комиссию (2% от ставки)
+        asyncio.create_task(notify_referrer_commission(user_id, amount))
+
         # Получаем никнейм игрока
         nickname = message.from_user.first_name or ""
         if message.from_user.last_name:
@@ -830,10 +843,7 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
-        
-        if betting_game.referral_system:
-            betting_game.referral_system.process_referral_win(user_id, winnings)
-        
+
         await dice_message.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
             f"<blockquote><code>{winnings:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎉</tg-emoji> Успешно зачислены на баланс!</blockquote>",
@@ -875,10 +885,7 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
-        
-        if betting_game.referral_system:
-            betting_game.referral_system.process_referral_win(user_id, winnings)
-        
+
         await dice2.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
             f"<blockquote><code>{winnings:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎉</tg-emoji> Успешно зачислены на баланс!</blockquote>",
@@ -935,10 +942,7 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
-        
-        if betting_game.referral_system:
-            betting_game.referral_system.process_referral_win(user_id, winnings)
-        
+
         await bot_roll.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
             f"<blockquote><code>{winnings:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎉</tg-emoji> Успешно зачислены на баланс!</blockquote>",
