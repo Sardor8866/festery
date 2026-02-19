@@ -31,6 +31,12 @@ from tower import (
     tower_router, TowerGame, show_tower_menu, process_tower_bet, process_tower_command
 )
 
+# Импортируем реферальный модуль
+from referrals import (
+    referral_router, referral_storage,
+    setup_referrals, process_start_referral
+)
+
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
 WEBHOOK_PATH = "/webhook"
@@ -100,7 +106,7 @@ def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="Профиль",  callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
-            InlineKeyboardButton(text="Партнёры", callback_data="partners", icon_custom_emoji_id=EMOJI_PARTNERS)
+            InlineKeyboardButton(text="Партнёры", callback_data="referrals", icon_custom_emoji_id=EMOJI_PARTNERS)
         ],
         [
             InlineKeyboardButton(text="Игры",    callback_data="games",   icon_custom_emoji_id=EMOJI_GAMES),
@@ -205,6 +211,12 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     try:
+        # ── Проверяем реферальный параметр ──────────────────────────────
+        args = message.text.split(maxsplit=1)
+        if len(args) > 1 and args[1].startswith("ref_"):
+            await process_start_referral(message, args[1])
+        # ────────────────────────────────────────────────────────────────
+
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
         await message.answer_sticker(sticker=WELCOME_STICKER_ID)
@@ -438,22 +450,6 @@ async def handle_text_message(message: Message, state: FSMContext):
         pass
 
 
-# ========== ПАРТНЁРЫ ==========
-@router.callback_query(F.data == "partners")
-async def partners_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_PARTNERS}">🤝</tg-emoji> <b>Наши партнёры</b>\n\n'
-        f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
-        f'Скоро здесь появится информация о партнёрах.',
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
-        ]])
-    )
-    await callback.answer()
-
-
 # ========== ЛИДЕРЫ ==========
 @router.callback_query(F.data == "leaders")
 async def leaders_callback(callback: CallbackQuery, state: FSMContext):
@@ -464,7 +460,7 @@ async def leaders_callback(callback: CallbackQuery, state: FSMContext):
         f'Скоро здесь появятся лучшие игроки.',
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")
         ]])
     )
     await callback.answer()
@@ -483,7 +479,7 @@ async def about_callback(callback: CallbackQuery, state: FSMContext):
         f'• Лицензия Curacao',
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Назад", callback_data="profile")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")
         ]])
     )
     await callback.answer()
@@ -512,16 +508,19 @@ async def main():
     betting_game = BettingGame(bot)
 
     # Порядок роутеров важен:
-    # 1. router       — основной (FSM ставки, мины, башня, навигация)
-    # 2. mines_router — обработчики кнопок игры мины
-    # 3. tower_router — обработчики кнопок игры башня
-    # 4. payment_router — числа без FSM (депозит/вывод)
+    # 1. router         — основной (FSM ставки, мины, башня, навигация)
+    # 2. mines_router   — обработчики кнопок игры мины
+    # 3. tower_router   — обработчики кнопок игры башня
+    # 4. referral_router— реферальная система
+    # 5. payment_router — числа без FSM (депозит/вывод)
     dp.include_router(router)
     dp.include_router(mines_router)
     dp.include_router(tower_router)
+    dp.include_router(referral_router)
     dp.include_router(payment_router)
 
     setup_payments(bot)
+    setup_referrals(bot)   # ← инициализация реферального модуля
 
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
