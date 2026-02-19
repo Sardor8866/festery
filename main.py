@@ -505,6 +505,12 @@ async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp  = Dispatcher(storage=MemoryStorage())
 
+    # ── Получаем username бота для реферальных ссылок ──────────────────
+    bot_info = await bot.get_me()
+    os.environ["BOT_USERNAME"] = bot_info.username
+    logging.info(f"Бот запущен как @{bot_info.username}")
+    # ───────────────────────────────────────────────────────────────────
+
     betting_game = BettingGame(bot)
 
     # Порядок роутеров важен:
