@@ -18,19 +18,17 @@ REFERRALS_FILE     = "referrals.json"
 # ──────────────────────────────────────────────
 #  EMOJI — только ID из main.py и game.py (рабочие)
 # ──────────────────────────────────────────────
-# Из main.py:
-EMOJI_PARTNERS   = "5906986955911993888"   # 🤝  Партнёры
-EMOJI_BACK       = "5906771962734057347"   # ◀️  Назад
-EMOJI_WALLET     = "5443127283898405358"   # 💰  Кошелёк
-EMOJI_WITHDRAWAL = "5445355530111437729"   # 📤  Вывод
-EMOJI_LEADERS    = "5440539497383087970"   # 👑  Лидеры / Корона
-EMOJI_STATS      = "5197288647275071607"   # 📊  Статистика
-# Из game.py:
-EMOJI_COIN       = "5197434882321567830"   # 💎  Монета / USDT
-EMOJI_CHECK      = "5197269100878907942"   # ✅  Ввод / Чек
-EMOJI_NUMBER     = "5456140674028019486"   # 🔢  Число / Ссылка
-EMOJI_3POINT     = "5397782960512444700"   # 🏀  Играть снова
-EMOJI_GOAL       = "5206607081334906820"   # ⚽  Забрать
+EMOJI_PARTNERS   = "5906986955911993888"
+EMOJI_BACK       = "5906771962734057347"
+EMOJI_WALLET     = "5443127283898405358"
+EMOJI_WITHDRAWAL = "5445355530111437729"
+EMOJI_LEADERS    = "5440539497383087970"
+EMOJI_STATS      = "5197288647275071607"
+EMOJI_COIN       = "5197434882321567830"
+EMOJI_CHECK      = "5197269100878907942"
+EMOJI_NUMBER     = "5456140674028019486"
+EMOJI_3POINT     = "5397782960512444700"
+EMOJI_GOAL       = "5206607081334906820"
 
 
 # ──────────────────────────────────────────────
@@ -166,26 +164,22 @@ def kb_referrals_main() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="📊 Статистика",
                 callback_data="ref_stats",
-                icon_custom_emoji_id=EMOJI_STATS
             ),
             InlineKeyboardButton(
                 text="💰 Вывести",
                 callback_data="ref_withdraw",
-                icon_custom_emoji_id=EMOJI_WALLET
             ),
         ],
         [
             InlineKeyboardButton(
                 text="🔗 Моя ссылка",
                 callback_data="ref_link",
-                icon_custom_emoji_id=EMOJI_NUMBER
             ),
         ],
         [
             InlineKeyboardButton(
                 text="На главную",
                 callback_data="back_to_main",
-                icon_custom_emoji_id=EMOJI_BACK
             ),
         ],
     ])
@@ -196,7 +190,6 @@ def kb_ref_back() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="◀️ Назад",
             callback_data="referrals",
-            icon_custom_emoji_id=EMOJI_BACK
         )
     ]])
 
@@ -206,7 +199,6 @@ def kb_ref_cancel() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="Отмена",
             callback_data="referrals",
-            icon_custom_emoji_id=EMOJI_BACK
         )
     ]])
 
@@ -427,31 +419,13 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
 
 # ──────────────────────────────────────────────
 #  ХЕЛПЕР: начисление комиссии (вызывается из game/mines/tower)
+#  Уведомление рефереру УБРАНО — начисление идёт тихо в фоне
 # ──────────────────────────────────────────────
 async def notify_referrer_commission(referral_user_id: int, bet_amount: float):
     commission = referral_storage.accrue_commission(referral_user_id, bet_amount)
-    if commission <= 0 or _bot is None:
+    if commission <= 0:
         return
-
-    referrer_id = referral_storage.get_referrer_id(referral_user_id)
-    if referrer_id is None:
-        return
-
-    try:
-        new_bal = referral_storage.get_ref_balance(referrer_id)
-        await _bot.send_message(
-            chat_id=referrer_id,
-            text=(
-                f"🎁 <b>Реферальная комиссия!</b>\n\n"
-                f"<blockquote>"
-                f"{e(EMOJI_COIN,'💎')} Начислено: <code>+{commission:.4f} USDT</code>\n"
-                f"{e(EMOJI_WALLET,'💰')} Реф-баланс: <code>{new_bal:.4f} USDT</code>"
-                f"</blockquote>"
-            ),
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as ex:
-        logging.warning(f"[Referral] Не удалось уведомить {referrer_id}: {ex}")
+    logging.info(f"[Referral] Комиссия {commission} USDT начислена тихо (без уведомления)")
 
 
 # ──────────────────────────────────────────────
