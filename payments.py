@@ -3,6 +3,7 @@ import uuid
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, Dict
+
 import aiohttp
 from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -226,8 +227,8 @@ async def check_payment_task(invoice_id: str):
                     try:
                         await bot.edit_message_text(
                             text=(
-                                f"<tg-emoji emoji-id=\"{EMOJI_ERROR}\">❌</tg-emoji> <b>Счет истек</b>\n\n"
-                                f"Время оплаты вышло. Попробуйте снова."
+                                "❌ <b>Счет истек</b>\n\n"
+                                "Время оплаты вышло. Попробуйте снова."
                             ),
                             parse_mode=ParseMode.HTML,
                             chat_id=invoice['chat_id'],
@@ -254,19 +255,19 @@ async def check_payment_task(invoice_id: str):
                     try:
                         await bot.edit_message_text(
                             text=(
-                                f"<tg-emoji emoji-id=\"{EMOJI_PARTY}\">🎉</tg-emoji> <b>Успешное пополнение!</b> <tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji>\n\n"
-                                f"<blockquote>"
-                                f"💎 <b>Сумма:</b> <code>{invoice['amount']} USDT</code>\n"
-                                f"💰 <b>Текущий баланс:</b> <code>{storage.get_balance(invoice['user_id']):.2f} USDT</code>\n"
-                                f"</blockquote>\n\n"
-                                f"<tg-emoji emoji-id=\"{EMOJI_GEM}\">✨</tg-emoji> Средства уже доступны для вывода!"
+                                f"🎉 <b>Успешное пополнение!</b> ✅\n\n"
+                                f"<pre>"
+                                f"💎 Сумма: {invoice['amount']} USDT\n"
+                                f"💰 Текущий баланс: {storage.get_balance(invoice['user_id']):.2f} USDT"
+                                f"</pre>\n\n"
+                                f"✨ Средства уже доступны для вывода!"
                             ),
                             parse_mode=ParseMode.HTML,
                             chat_id=invoice['chat_id'],
                             message_id=invoice['message_id'],
                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                                 InlineKeyboardButton(
-                                    text="◀️ В профиль", 
+                                    text="◀️ В профиль",
                                     callback_data="profile",
                                     icon_custom_emoji_id=EMOJI_BACK
                                 )
@@ -318,7 +319,6 @@ async def _process_deposit(message: Message, user_id: int):
             return
 
         invoice_data = await crypto_api.create_invoice(amount)
-
         if not invoice_data or 'pay_url' not in invoice_data:
             await message.answer(
                 "❌ Ошибка создания счета. Попробуйте позже.",
@@ -337,10 +337,10 @@ async def _process_deposit(message: Message, user_id: int):
 
         sent_msg = await message.answer(
             text=(
-                f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji>Счет Создан!</b>\n\n"
-                f"<blockquote><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: <b><code>{amount}</code></b>\n"
-                f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji>Действует-<b>5 минут</b></blockquote>\n\n"
-                f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату!"
+                f"💰Счет Создан!\n\n"
+                f"<pre>💰Сумма: {amount}\n"
+                f"⌛️Действует-5 минут</pre>\n\n"
+                f"🔵Ждем оплату!"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -398,7 +398,6 @@ async def _process_withdraw(message: Message, user_id: int):
             return
 
         check = await crypto_api.create_check(amount, user_id)
-
         if not check or 'bot_check_url' not in check:
             await message.answer(
                 "❌ Ошибка создания чека. Попробуйте позже.",
@@ -411,26 +410,25 @@ async def _process_withdraw(message: Message, user_id: int):
         storage.deduct_balance(user_id, amount)
         storage.set_last_withdrawal(user_id)
 
-        # Обновленное сообщение для вывода
         await message.answer(
             text=(
-                f"<tg-emoji emoji-id=\"{EMOJI_ROCKET}\">🚀</tg-emoji> <b>Чек успешно создан!</b> <tg-emoji emoji-id=\"{EMOJI_SUCCESS}\">✅</tg-emoji>\n\n"
-                f"<blockquote>"
-                f"💎 <b>Сумма:</b> <code>{amount} USDT</code>\n"
-                f"💰 <b>Списано с баланса:</b> <code>{amount} USDT</code>\n"
-                f"💵 <b>Остаток на балансе:</b> <code>{storage.get_balance(user_id):.2f} USDT</code>\n"
-                f"</blockquote>\n\n"
-                f"<tg-emoji emoji-id=\"{EMOJI_GEM}\">✨</tg-emoji> Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
+                f"🚀 <b>Чек успешно создан!</b> ✅\n\n"
+                f"<pre>"
+                f"💎 Сумма: {amount} USDT\n"
+                f"💰 Списано с баланса: {amount} USDT\n"
+                f"💵 Остаток на балансе: {storage.get_balance(user_id):.2f} USDT"
+                f"</pre>\n\n"
+                f"✨ Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="💸 Получить чек", 
+                    text="💸 Получить чек",
                     url=check['bot_check_url'],
                     icon_custom_emoji_id=EMOJI_LINK
                 )],
                 [InlineKeyboardButton(
-                    text="◀️ В профиль", 
+                    text="◀️ В профиль",
                     callback_data="profile",
                     icon_custom_emoji_id=EMOJI_BACK
                 )]
