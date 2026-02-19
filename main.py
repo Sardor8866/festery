@@ -381,7 +381,7 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
 # ========== ТЕКСТОВЫЕ СООБЩЕНИЯ ==========
 
 # Хендлер для команды /mines и mines с аргументами (с флешом и без)
-@router.message(F.text.regexp(r'^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$', re.IGNORECASE))
+@router.message(F.text.regexp(r'(?i)^(?:/)?(?:mines|мины)\s+[\d.,]+\s+\d+$'))
 async def mines_command_handler(message: Message, state: FSMContext):
     await process_mines_command(message, state, storage)
 
