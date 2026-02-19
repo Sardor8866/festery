@@ -1,19 +1,21 @@
 import random
 import re
+import asyncio
 import logging
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.enums import ParseMode
 
-# ========== ПРОВЕРЕННЫЕ ID ИЗ game.py (для кнопок управления) ==========
+# ========== EMOJI IDS ==========
 EMOJI_BACK   = "5906771962734057347"
 EMOJI_GOAL   = "5206607081334906820"
 EMOJI_3POINT = "5397782960512444700"
 EMOJI_NUMBER = "5456140674028019486"
 
 GRID_SIZE = 5  # 5x5 = 25 клеток
+INACTIVITY_TIMEOUT = 300  # 5 минут в секундах
 
 # ========== СКРЫТЫЕ МИНЫ ==========
 HIDDEN_MINES = {
@@ -63,10 +65,76 @@ class MinesGame(StatesGroup):
 
 
 mines_router = Router()
-_sessions: dict = {}
+_sessions: dict      = {}   # user_id -> session dict
+_timeout_tasks: dict = {}   # user_id -> asyncio.Task
+
+
+# ========== ТАЙМАУТ БЕЗДЕЙСТВИЯ ==========
+
+def _cancel_timeout(user_id: int):
+    """Отменяет таймер бездействия если он есть."""
+    task = _timeout_tasks.pop(user_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+def _start_timeout(user_id: int, bot: Bot, storage):
+    """Запускает/перезапускает таймер бездействия на 5 минут."""
+    _cancel_timeout(user_id)
+    task = asyncio.create_task(_inactivity_watcher(user_id, bot, storage))
+    _timeout_tasks[user_id] = task
+
+
+async def _inactivity_watcher(user_id: int, bot: Bot, storage):
+    """Ждёт 5 минут без активности, потом удаляет игру и возвращает ставку."""
+    try:
+        await asyncio.sleep(INACTIVITY_TIMEOUT)
+    except asyncio.CancelledError:
+        return
+
+    session = _sessions.pop(user_id, None)
+    if session is None:
+        return
+
+    # Возвращаем ставку
+    bet = session.get('bet', 0)
+    if bet > 0:
+        storage.add_balance(user_id, bet)
+        logging.info(f"[mines] Таймаут user={user_id}, ставка {bet} возвращена.")
+
+    # Удаляем сообщение с игрой
+    msg_id  = session.get('message_id')
+    chat_id = session.get('chat_id')
+    if msg_id and chat_id:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception:
+            pass
 
 
 # ========== ХЕЛПЕРЫ ==========
+
+def _has_active_game(user_id: int) -> bool:
+    return user_id in _sessions
+
+
+def _active_game_error_text(session: dict) -> str:
+    mines = session['mines_count']
+    bet   = session['bet']
+    gems  = session.get('gems_opened', 0)
+    mult  = get_multiplier(mines, gems)
+    return (
+        f"<blockquote><b>⚠️ У вас уже есть активная игра!</b></blockquote>\n\n"
+        f"<blockquote>"
+        f"💣 Мин: <b>{mines}</b>\n"
+        f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Ставка: <code>{bet}</code>"
+        f"<tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"💎 Открыто: <b>{gems}</b> | "
+        f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji><b>x{mult}</b>\n"
+        f"</blockquote>\n\n"
+        f"<blockquote><i>Завершите текущую игру прежде чем начать новую.</i></blockquote>"
+    )
+
 
 def get_multiplier(mines_count: int, gems_opened: int) -> float:
     if gems_opened == 0:
@@ -89,7 +157,7 @@ def generate_board(mines_count: int) -> tuple:
     total_mines = mines_count + hidden
     total_mines = min(total_mines, GRID_SIZE * GRID_SIZE - 1)
 
-    all_positions = random.sample(range(GRID_SIZE * GRID_SIZE), total_mines)
+    all_positions  = random.sample(range(GRID_SIZE * GRID_SIZE), total_mines)
     real_positions = set(all_positions[:mines_count])
 
     board = [False] * (GRID_SIZE * GRID_SIZE)
@@ -107,19 +175,15 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
     for row in range(GRID_SIZE):
         btn_row = []
         for col in range(GRID_SIZE):
-            idx      = row * GRID_SIZE + col
-            is_mine  = board[idx]
-            is_open  = revealed[idx]
-
+            idx            = row * GRID_SIZE + col
+            is_mine        = board[idx]
+            is_open        = revealed[idx]
             real_positions = session.get('real_positions', set())
             is_real_mine   = idx in real_positions
 
             if is_open:
-                if is_mine and is_real_mine:
-                    text = CELL_EXPLODE
-                else:
-                    text = CELL_GEM
-                cb = "mines_noop"
+                text = CELL_EXPLODE if (is_mine and is_real_mine) else CELL_GEM
+                cb   = "mines_noop"
             elif game_over and is_real_mine:
                 text = CELL_MINE
                 cb   = "mines_noop"
@@ -168,14 +232,11 @@ def build_game_keyboard(session: dict, game_over: bool = False) -> InlineKeyboar
 
 
 def build_mines_select_keyboard() -> InlineKeyboardMarkup:
-    # Кнопки только с количеством мин, без множителей
     presets = [2, 5, 10, 15, 18]
-    row = []
-    for m in presets:
-        row.append(InlineKeyboardButton(
-            text=f"💣 {m}",
-            callback_data=f"mines_select_{m}",
-        ))
+    row = [
+        InlineKeyboardButton(text=f"💣 {m}", callback_data=f"mines_select_{m}")
+        for m in presets
+    ]
     return InlineKeyboardMarkup(inline_keyboard=[
         row,
         [InlineKeyboardButton(
@@ -197,10 +258,6 @@ def game_text(session: dict) -> str:
     gems       = session.get('gems_opened', 0)
     mult       = get_multiplier(mines, gems)
     next_mult  = get_next_mult(mines, gems)
-    profit     = round(bet * mult, 2)
-    hidden     = HIDDEN_MINES.get(mines, 0)
-    total_safe = GRID_SIZE * GRID_SIZE - mines - hidden
-    safe_left  = total_safe - gems
 
     return (
         f"<blockquote><b>💣 Мины</b></blockquote>\n\n"
@@ -210,18 +267,44 @@ def game_text(session: dict) -> str:
         f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b><code>x{mult}</code></b>\n"
         f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b><code>x{next_mult}</code></b>\n"
         f"</blockquote>\n\n"
-        f"<blockquote><b><i>Игра началась! выберите безопасную ячейку!</i></b></blockquote>"
+        f"<blockquote><b><i>Игра началась! Выберите безопасную ячейку!</i></b></blockquote>"
     )
+
+
+# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ СОЗДАНИЯ СЕССИИ ==========
+
+def _create_session(mines_count: int, bet: float, chat_id: int) -> dict:
+    board, real_positions = generate_board(mines_count)
+    return {
+        'board':          board,
+        'real_positions': real_positions,
+        'revealed':       [False] * (GRID_SIZE * GRID_SIZE),
+        'mines_count':    mines_count,
+        'bet':            bet,
+        'gems_opened':    0,
+        'exploded_idx':   -1,
+        'message_id':     None,   # заполняется после отправки
+        'chat_id':        chat_id,
+    }
 
 
 # ========== ПУБЛИЧНАЯ ФУНКЦИЯ ВХОДА ==========
 
 async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
     user_id = callback.from_user.id
+
+    if _has_active_game(user_id):
+        await callback.answer(
+            "⚠️ У вас уже есть активная игра! Завершите её прежде чем начать новую.",
+            show_alert=True
+        )
+        return
+
     balance = storage.get_balance(user_id)
     text = (
         f"<blockquote><b>💣 Мины</b></blockquote>\n\n"
-        f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></b></blockquote>\n\n"
+        f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: "
+        f"<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></b></blockquote>\n\n"
         f"<blockquote><b>Выберите количество мин:</b></blockquote>\n"
     )
     await callback.message.edit_text(
@@ -236,14 +319,22 @@ async def show_mines_menu(callback: CallbackQuery, storage, betting_game):
 
 @mines_router.callback_query(F.data.startswith("mines_select_"))
 async def mines_select_handler(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+
+    if _has_active_game(user_id):
+        await callback.answer(
+            "⚠️ У вас уже есть активная игра! Завершите её прежде чем начать новую.",
+            show_alert=True
+        )
+        return
+
     mines_count = int(callback.data.split("_")[-1])
     await state.update_data(mines_count=mines_count)
     await state.set_state(MinesGame.choosing_bet)
 
-    text = f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>"
-
     await callback.message.edit_text(
-        text,
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>"
+        f"Введите сумму ставки:</b></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
@@ -265,10 +356,20 @@ async def mines_back_select(callback: CallbackQuery, state: FSMContext):
 
 @mines_router.callback_query(F.data == "mines_manual")
 async def mines_manual_handler(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+
+    if _has_active_game(user_id):
+        await callback.answer(
+            "⚠️ У вас уже есть активная игра! Завершите её прежде чем начать новую.",
+            show_alert=True
+        )
+        return
+
     await state.update_data(mines_count=None, waiting_manual=True)
     await state.set_state(MinesGame.choosing_bet)
     await callback.message.edit_text(
-        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите количество мин (от 2 до 24):</b></blockquote>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>"
+        f"Введите количество мин (от 2 до 24):</b></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
@@ -284,7 +385,9 @@ async def mines_manual_handler(callback: CallbackQuery, state: FSMContext):
 @mines_router.callback_query(F.data == "mines_play_again")
 async def mines_play_again(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
-    _sessions.pop(callback.from_user.id, None)
+    user_id = callback.from_user.id
+    _sessions.pop(user_id, None)
+    _cancel_timeout(user_id)
     await state.clear()
     await show_mines_menu(callback, pay_storage, None)
 
@@ -294,8 +397,8 @@ async def mines_exit(callback: CallbackQuery, state: FSMContext):
     from payments import storage as pay_storage
     user_id = callback.from_user.id
     _sessions.pop(user_id, None)
+    _cancel_timeout(user_id)
     await state.clear()
-    balance = pay_storage.get_balance(user_id)
     from main import get_games_menu, get_games_menu_text
     await callback.message.edit_text(
         get_games_menu_text(user_id),
@@ -325,35 +428,42 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Уже открыта!")
         return
 
+    # Есть активность — перезапускаем таймер
+    _start_timeout(user_id, callback.bot, pay_storage)
+
     session['revealed'][idx] = True
 
     if session['board'][idx]:
         # МИНА
-        mines_count    = session['mines_count']
         bet            = session['bet']
         real_positions = session.get('real_positions', set())
 
         if idx not in real_positions:
             if real_positions:
-                remove_one = random.choice(list(real_positions))
+                remove_one     = random.choice(list(real_positions))
                 real_positions = (real_positions - {remove_one}) | {idx}
                 session['real_positions'] = real_positions
 
         _sessions.pop(user_id, None)
+        _cancel_timeout(user_id)
         await state.clear()
 
         balance = pay_storage.get_balance(user_id)
         await callback.message.edit_text(
-            f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы попали на мину!</b></blockquote>\n\n"
+            f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>"
+            f"Вы попали на мину!</b></blockquote>\n\n"
             f"<blockquote>"
-            f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-            f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Баланс: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+            f"<tg-emoji emoji-id=\"5447183459602669338\">🎰</tg-emoji>Потеряно: "
+            f"<code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+            f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Баланс: "
+            f"<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
             f"</blockquote>\n\n"
             f"<blockquote><b><i>Вы проиграли ставку! Это не повод сдаваться!</i></b></blockquote>",
             parse_mode=ParseMode.HTML,
             reply_markup=build_game_keyboard(session, game_over=True)
         )
         await callback.answer("💥Мина!")
+
     else:
         # ГЕМ
         session['gems_opened'] += 1
@@ -364,25 +474,29 @@ async def mines_cell_handler(callback: CallbackQuery, state: FSMContext):
         mult        = get_multiplier(mines_count, gems)
 
         if gems == total_safe:
-            # ПОБЕДА
+            # ПОБЕДА — открыли все безопасные клетки
             bet      = session['bet']
             winnings = round(bet * mult, 2)
             pay_storage.add_balance(user_id, winnings)
             _sessions.pop(user_id, None)
+            _cancel_timeout(user_id)
             await state.clear()
 
             balance = pay_storage.get_balance(user_id)
             await callback.message.edit_text(
-                f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>Вы выиграли!</b></blockquote>\n\n"
+                f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>"
+                f"Вы выиграли!</b></blockquote>\n\n"
                 f"<blockquote>"
                 f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
-                f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-                f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+                f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: "
+                f"<code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+                f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: "
+                f"<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
                 f"</blockquote>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_game_keyboard(session, game_over=True)
             )
-            await callback.answer(f"🏆 Победа!")
+            await callback.answer("🏆 Победа!")
         else:
             await callback.message.edit_text(
                 game_text(session),
@@ -414,6 +528,7 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
 
     pay_storage.add_balance(user_id, winnings)
     _sessions.pop(user_id, None)
+    _cancel_timeout(user_id)
     await state.clear()
 
     balance = pay_storage.get_balance(user_id)
@@ -421,8 +536,10 @@ async def mines_cashout(callback: CallbackQuery, state: FSMContext):
         f"<blockquote><b><tg-emoji emoji-id=\"5312441427764989435\">🎰</tg-emoji>Кэшаут!</b></blockquote>\n\n"
         f"<blockquote>"
         f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
-        f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: <code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
-        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: <code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
+        f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: "
+        f"<code>{winnings}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: "
+        f"<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>"
         f"</blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -461,16 +578,30 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
             return
         await state.update_data(mines_count=m, waiting_manual=False)
         await message.answer(
-            f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>",
+            f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>"
+            f"Введите сумму ставки:</b></blockquote>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="Назад", callback_data="mines_back_select", icon_custom_emoji_id=EMOJI_BACK)
+                InlineKeyboardButton(
+                    text="Назад",
+                    callback_data="mines_back_select",
+                    icon_custom_emoji_id=EMOJI_BACK
+                )
             ]])
         )
         return
 
     if mines_count is None:
         await state.clear()
+        return
+
+    # Блокируем если уже есть активная игра
+    if _has_active_game(user_id):
+        session = _sessions[user_id]
+        await message.answer(
+            _active_game_error_text(session),
+            parse_mode=ParseMode.HTML
+        )
         return
 
     try:
@@ -487,10 +618,6 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
         await message.answer("❌ Максимальная ставка: 10000")
         return
 
-    if bet <= 0:
-        await message.answer("❌ Ставка должна быть больше 0")
-        return
-
     balance = storage.get_balance(user_id)
     if bet > balance:
         await message.answer(
@@ -501,39 +628,34 @@ async def process_mines_bet(message: Message, state: FSMContext, storage):
 
     storage.deduct_balance(user_id, bet)
 
-    board, real_positions = generate_board(mines_count)
-    session = {
-        'board':          board,
-        'real_positions': real_positions,
-        'revealed':       [False] * (GRID_SIZE * GRID_SIZE),
-        'mines_count':    mines_count,
-        'bet':            bet,
-        'gems_opened':    0,
-        'exploded_idx':   -1,
-    }
+    session = _create_session(mines_count, bet, message.chat.id)
     _sessions[user_id] = session
     await state.set_state(MinesGame.playing)
 
-    await message.answer(
+    sent = await message.answer(
         game_text(session),
         parse_mode=ParseMode.HTML,
         reply_markup=build_game_keyboard(session)
     )
+    session['message_id'] = sent.message_id
+
+    # Запускаем таймер бездействия
+    _start_timeout(user_id, message.bot, storage)
 
 
-# ========== ОБРАБОТКА КОМАНДЫ /mines (вызов из main.py) ==========
+# ========== ОБРАБОТКА КОМАНДЫ /mines ==========
 
 async def process_mines_command(message: Message, state: FSMContext, storage):
     """
     Обрабатывает команды:
-      /mines 0.3 5
-      mines 0.3 5
-      /мины 0.3 5
-      мины 0.3 5
+      /mines 0.3 5  |  mines 0.3 5  |  /мины 0.3 5  |  мины 0.3 5
     """
-    text = message.text.strip()
-    pattern = r'^(?:/)?(?:mines|мины)\s+([\d.,]+)\s+(\d+)$'
-    match = re.match(pattern, text, re.IGNORECASE)
+    text  = message.text.strip()
+    match = re.match(
+        r'^(?:/)?(?:mines|мины)\s+([\d.,]+)\s+(\d+)$',
+        text,
+        re.IGNORECASE
+    )
 
     if not match:
         await message.answer(
@@ -549,13 +671,12 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         return
 
     try:
-        bet = float(match.group(1).replace(',', '.'))
+        bet         = float(match.group(1).replace(',', '.'))
         mines_count = int(match.group(2))
     except ValueError:
         await message.answer("❌ Неверный формат чисел.")
         return
 
-    # Валидация мин
     if mines_count < 2 or mines_count > 24:
         await message.answer(
             "<blockquote><b>❌ Количество мин должно быть от 2 до 24.</b></blockquote>",
@@ -563,7 +684,6 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         )
         return
 
-    # Валидация ставки
     if bet < 0.1:
         await message.answer(
             "<blockquote><b>❌ Минимальная ставка: 0.1</b></blockquote>",
@@ -579,8 +699,17 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         return
 
     user_id = message.from_user.id
-    balance = storage.get_balance(user_id)
 
+    # Блокируем если уже есть активная игра
+    if _has_active_game(user_id):
+        session = _sessions[user_id]
+        await message.answer(
+            _active_game_error_text(session),
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    balance = storage.get_balance(user_id)
     if bet > balance:
         await message.answer(
             f"<blockquote><b>❌ Недостаточно средств!</b>\n"
@@ -589,28 +718,18 @@ async def process_mines_command(message: Message, state: FSMContext, storage):
         )
         return
 
-    # Если уже идёт игра — завершаем старую (ставка теряется)
-    if user_id in _sessions:
-        _sessions.pop(user_id)
-
-    # Списываем ставку и создаём игру
     storage.deduct_balance(user_id, bet)
 
-    board, real_positions = generate_board(mines_count)
-    session = {
-        'board':          board,
-        'real_positions': real_positions,
-        'revealed':       [False] * (GRID_SIZE * GRID_SIZE),
-        'mines_count':    mines_count,
-        'bet':            bet,
-        'gems_opened':    0,
-        'exploded_idx':   -1,
-    }
+    session = _create_session(mines_count, bet, message.chat.id)
     _sessions[user_id] = session
     await state.set_state(MinesGame.playing)
 
-    await message.answer(
+    sent = await message.answer(
         game_text(session),
         parse_mode=ParseMode.HTML,
         reply_markup=build_game_keyboard(session)
     )
+    session['message_id'] = sent.message_id
+
+    # Запускаем таймер бездействия
+    _start_timeout(user_id, message.bot, storage)
