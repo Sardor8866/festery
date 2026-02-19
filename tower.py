@@ -357,9 +357,7 @@ async def tower_diff_handler(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TowerGame.choosing_bet)
 
     await callback.message.edit_text(
-        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>"
-        f"Сложность: {DIFFICULTY_EMOJI[difficulty]} {DIFFICULTY_NAMES[difficulty]}\n"
-        f"Введите сумму ставки:</b></blockquote>",
+        f"<blockquote><b><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму ставки:</b></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
