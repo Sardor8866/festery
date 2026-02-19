@@ -267,12 +267,12 @@ def build_tower_keyboard(session: dict, game_over: bool = False) -> InlineKeyboa
 def build_tower_select_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🟢 Лёгкий (1 💣)", callback_data="tower_diff_1"),
-            InlineKeyboardButton(text="🟡 Средний (2 💣)", callback_data="tower_diff_2"),
+            InlineKeyboardButton(text="1 💣", callback_data="tower_diff_1"),
+            InlineKeyboardButton(text="2 💣", callback_data="tower_diff_2"),
         ],
         [
-            InlineKeyboardButton(text="🔴 Сложный (3 💣)", callback_data="tower_diff_3"),
-            InlineKeyboardButton(text="💀 Безумный (4 💣)", callback_data="tower_diff_4"),
+            InlineKeyboardButton(text="3 💣", callback_data="tower_diff_3"),
+            InlineKeyboardButton(text="4 💣", callback_data="tower_diff_4"),
         ],
         [
             InlineKeyboardButton(
@@ -297,7 +297,7 @@ def game_text(session: dict) -> str:
         f"<blockquote>"
         f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Ставка: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
         f"{DIFFICULTY_EMOJI[diff]} Сложность: <b>{DIFFICULTY_NAMES[diff]}</b>\n"
-        f"🏗 Этаж: <b>{floor_num}/{FLOORS}</b>\n"
+        f"<tg-emoji emoji-id=\"5197503331215361533\">🎰</tg-emoji>Этаж: <b>{floor_num}/{FLOORS}</b>\n"
         f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b><code>x{mult}</code></b>\n"
         f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b><code>x{next_mult}</code></b>\n"
         f"</blockquote>\n\n"
@@ -323,7 +323,6 @@ async def show_tower_menu(callback: CallbackQuery, storage, betting_game=None):
         f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>: "
         f"<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></b></blockquote>\n\n"
         f"<blockquote><b>Выберите сложность:</b></blockquote>\n"
-        f"<blockquote><i>💣 — бомб на каждом этаже из {CELLS} ячеек</i></blockquote>"
     )
     await callback.message.edit_text(
         text,
@@ -637,14 +636,7 @@ async def process_tower_command(message: Message, state: FSMContext, storage):
 
     if not match:
         await message.answer(
-            "<blockquote><b>❌ Неверный формат!</b></blockquote>\n\n"
-            "<blockquote>Используйте:\n"
-            "<code>/tower [ставка] [сложность]</code>\n\n"
-            "Сложность: 1 (🟢), 2 (🟡), 3 (🔴), 4 (💀)\n\n"
-            "Примеры:\n"
-            "<code>/tower 0.5 1</code>\n"
-            "<code>/tower 1.0 2</code>\n"
-            "<code>/башня 0.5 3</code></blockquote>",
+            "<blockquote><b>❌ Неверный формат!</b></blockquote>\n\n",
             parse_mode=ParseMode.HTML
         )
         return
