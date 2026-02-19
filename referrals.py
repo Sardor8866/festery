@@ -11,12 +11,12 @@ from aiogram.enums import ParseMode
 # ──────────────────────────────────────────────
 #  НАСТРОЙКИ
 # ──────────────────────────────────────────────
-REFERRAL_PERCENT   = 2        # % от ставки реферала
-MIN_REF_WITHDRAWAL = 1.0      # минимальная сумма вывода с реф-баланса (USDT)
+REFERRAL_PERCENT   = 2
+MIN_REF_WITHDRAWAL = 1.0
 REFERRALS_FILE     = "referrals.json"
 
 # ──────────────────────────────────────────────
-#  EMOJI — только ID из main.py и game.py (рабочие)
+#  EMOJI
 # ──────────────────────────────────────────────
 EMOJI_PARTNERS   = "5906986955911993888"
 EMOJI_BACK       = "5906771962734057347"
@@ -27,8 +27,9 @@ EMOJI_STATS      = "5197288647275071607"
 EMOJI_COIN       = "5197434882321567830"
 EMOJI_CHECK      = "5197269100878907942"
 EMOJI_NUMBER     = "5456140674028019486"
-EMOJI_3POINT     = "5397782960512444700"
-EMOJI_GOAL       = "5206607081334906820"
+
+# Эмодзи перед каждым рефералом в списке — замени ID на свои
+EMOJI_REF_USER   = "5906581476639513176"   # 👤 замени на нужный
 
 
 # ──────────────────────────────────────────────
@@ -164,22 +165,26 @@ def kb_referrals_main() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="📊 Статистика",
                 callback_data="ref_stats",
+                icon_custom_emoji_id=EMOJI_STATS
             ),
             InlineKeyboardButton(
                 text="💰 Вывести",
                 callback_data="ref_withdraw",
+                icon_custom_emoji_id=EMOJI_WALLET
             ),
         ],
         [
             InlineKeyboardButton(
                 text="🔗 Моя ссылка",
                 callback_data="ref_link",
+                icon_custom_emoji_id=EMOJI_NUMBER
             ),
         ],
         [
             InlineKeyboardButton(
                 text="На главную",
                 callback_data="back_to_main",
+                icon_custom_emoji_id=EMOJI_BACK
             ),
         ],
     ])
@@ -190,6 +195,7 @@ def kb_ref_back() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="◀️ Назад",
             callback_data="referrals",
+            icon_custom_emoji_id=EMOJI_BACK
         )
     ]])
 
@@ -199,6 +205,7 @@ def kb_ref_cancel() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="Отмена",
             callback_data="referrals",
+            icon_custom_emoji_id=EMOJI_BACK
         )
     ]])
 
@@ -246,12 +253,15 @@ def text_ref_stats(user_id: int) -> str:
     stats = referral_storage.get_stats(user_id)
     refs  = stats["referrals_list"]
 
+    # Последние 5 рефералов (самые новые сверху)
+    last_5 = list(reversed(refs[-5:])) if refs else []
+
     lines = [
-        f"  <code>{i:02d}.</code> <code>{uid}</code>"
-        for i, uid in enumerate(refs[:20], 1)
+        f"{e(EMOJI_REF_USER,'👤')} <code>{uid}</code>"
+        for uid in last_5
     ]
-    refs_block = "\n".join(lines) if lines else "  <i>Рефералов пока нет</i>"
-    more = f"\n  <i>... и ещё {len(refs) - 20}</i>" if len(refs) > 20 else ""
+    refs_block = "\n".join(lines) if lines else f"  <i>Рефералов пока нет</i>"
+    more = f"\n{e(EMOJI_STATS,'📊')} <i>... и ещё {len(refs) - 5}</i>" if len(refs) > 5 else ""
 
     return (
         f"{e(EMOJI_STATS,'📊')} <b>Детальная статистика</b>\n\n"
@@ -259,10 +269,10 @@ def text_ref_stats(user_id: int) -> str:
         f"{e(EMOJI_WALLET,'💰')} Реф-баланс: <code>{stats['ref_balance']:.4f} USDT</code>\n"
         f"{e(EMOJI_LEADERS,'👑')} Всего заработано: <code>{stats['total_earned']:.4f} USDT</code>\n"
         f"{e(EMOJI_WITHDRAWAL,'📤')} Всего выведено: <code>{stats['total_withdrawn']:.4f} USDT</code>\n"
-        f"👥 Рефералов: <code>{stats['referrals_count']}</code>\n"
+        f"👥 Всего рефералов: <code>{stats['referrals_count']}</code>\n"
         f"</blockquote>\n\n"
         f"<blockquote>"
-        f"<b>Список рефералов:</b>\n"
+        f"<b>Последние рефералы:</b>\n"
         f"{refs_block}{more}"
         f"</blockquote>"
     )
@@ -348,7 +358,7 @@ async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@referral_router.message(ReferralWithdraw.entering_amount, F.text)
+# ── Вызывается напрямую из main.py (handle_text_message) ──
 async def ref_withdraw_amount(message: Message, state: FSMContext):
     try:
         amount = float(message.text.replace(",", ".").strip())
@@ -417,15 +427,19 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
     logging.info(f"[Referral] {message.from_user.id} вывел {amount} USDT с реф-баланса")
 
 
+# Регистрируем хендлер в роутере тоже
+@referral_router.message(ReferralWithdraw.entering_amount, F.text)
+async def ref_withdraw_amount_handler(message: Message, state: FSMContext):
+    await ref_withdraw_amount(message, state)
+
+
 # ──────────────────────────────────────────────
-#  ХЕЛПЕР: начисление комиссии (вызывается из game/mines/tower)
-#  Уведомление рефереру УБРАНО — начисление идёт тихо в фоне
+#  ХЕЛПЕР: начисление комиссии — тихо, без уведомлений
 # ──────────────────────────────────────────────
 async def notify_referrer_commission(referral_user_id: int, bet_amount: float):
     commission = referral_storage.accrue_commission(referral_user_id, bet_amount)
-    if commission <= 0:
-        return
-    logging.info(f"[Referral] Комиссия {commission} USDT начислена тихо (без уведомления)")
+    if commission > 0:
+        logging.info(f"[Referral] Комиссия {commission} USDT начислена тихо рефереру")
 
 
 # ──────────────────────────────────────────────
