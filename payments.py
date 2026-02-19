@@ -255,19 +255,18 @@ async def check_payment_task(invoice_id: str):
                     try:
                         await bot.edit_message_text(
                             text=(
-                                f"🎉 <b>Успешное пополнение!</b> ✅\n\n"
+                                f"<blockquote><tg-emoji emoji-id=\"5197288647275071607\">💰</tg-emoji><b>Успешное пополнение!</b></blockquote>\n\n"
                                 f"<blockquote>"
-                                f"💎 Сумма: {invoice['amount']} USDT\n"
-                                f"💰 Текущий баланс: {storage.get_balance(invoice['user_id']):.2f} USDT"
+                                f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: {invoice['amount']}\n"
+                                f"<tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: {storage.get_balance(invoice['user_id']):.2f} <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>"
                                 f"</blockquote>\n\n"
-                                f"✨ Средства уже доступны для вывода!"
                             ),
                             parse_mode=ParseMode.HTML,
                             chat_id=invoice['chat_id'],
                             message_id=invoice['message_id'],
                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                                 InlineKeyboardButton(
-                                    text="◀️ В профиль",
+                                    text="Назад",
                                     callback_data="profile",
                                     icon_custom_emoji_id=EMOJI_BACK
                                 )
@@ -337,10 +336,10 @@ async def _process_deposit(message: Message, user_id: int):
 
         sent_msg = await message.answer(
             text=(
-                f"💰Счет Создан!\n\n"
-                f"<pre>💰Сумма: {amount}\n"
-                f"⌛️Действует-5 минут</pre>\n\n"
-                f"🔵Ждем оплату!"
+                f"<b><tg-emoji emoji-id=\"5906482735341377395\">💰</tg-emoji>Счет Создан!</b>\n\n"
+                f"<blockquote><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма: <b><code>{amount}</code></b>\n"
+                f"<tg-emoji emoji-id=\"5906598824012420908\">⌛️</tg-emoji>Действует-<b>5 минут</b></blockquote>\n\n"
+                f"<tg-emoji emoji-id=\"5386367538735104399\">🔵</tg-emoji>Ждем оплату!"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -412,23 +411,22 @@ async def _process_withdraw(message: Message, user_id: int):
 
         await message.answer(
             text=(
-                f"🚀 <b>Чек успешно создан!</b> ✅\n\n"
-                f"<pre>"
-                f"💎 Сумма: {amount} USDT\n"
+                f"<blockquote><tg-emoji emoji-id=\"5312441427764989435\">💰</tg-emoji><b>Вывод обработан!</b>✅</blockquote>\n\n"
+                f"<blockquote>"
+                f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>Сумма:<code> {amount}</code>\n"
                 f"💰 Списано с баланса: {amount} USDT\n"
-                f"💵 Остаток на балансе: {storage.get_balance(user_id):.2f} USDT"
-                f"</pre>\n\n"
-                f"✨ Нажмите кнопку ниже, чтобы активировать чек в @CryptoBot"
+                f"<tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: <code>{storage.get_balance(user_id):.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>"
+                f"</blockquote>\n\n"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="💸 Получить чек",
+                    text="Получить чек",
                     url=check['bot_check_url'],
                     icon_custom_emoji_id=EMOJI_LINK
                 )],
                 [InlineKeyboardButton(
-                    text="◀️ В профиль",
+                    text="Назад",
                     callback_data="profile",
                     icon_custom_emoji_id=EMOJI_BACK
                 )]
