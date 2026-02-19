@@ -222,8 +222,8 @@ def game_text(session: dict) -> str:
         f"<blockquote>"
         f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Ставка: <code>{bet}</code><tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
         f"💣 Мин: <b>{mines}</b>\n"
-        f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b>x{mult}</b>\n"
-        f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b>x{next_mult}</b>\n"
+        f"<tg-emoji emoji-id=\"5330320040883411678\">🎰</tg-emoji>Текущий: <b><code>x{mult}</code></b>\n"
+        f"<tg-emoji emoji-id=\"5391032818111363540\">🎰</tg-emoji>Следующий: <b><code>x{next_mult}</code></b>\n"
         f"</blockquote>\n\n"
         f"<blockquote><b><i>Игра началась! выберите безопасную ячейку!</i></b></blockquote>"
     )
