@@ -15,6 +15,13 @@ except ImportError:
     async def notify_referrer_commission(user_id: int, bet_amount: float):
         pass
 
+# Модуль лидеров
+try:
+    from leaders import record_game_result
+except ImportError:
+    def record_game_result(user_id, name, bet, win):
+        pass
+
 # ========== EMOJI IDS ==========
 EMOJI_BACK   = "5906771962734057347"
 EMOJI_GOAL   = "5206607081334906820"
@@ -449,6 +456,10 @@ async def tower_cell_handler(callback: CallbackQuery, state: FSMContext):
         _cancel_timeout(user_id)
         await state.clear()
 
+        # Записываем в лидерборд: проигрыш
+        name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
+        record_game_result(user_id, name, bet, 0.0)
+
         balance = pay_storage.get_balance(user_id)
         await callback.message.edit_text(
             f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>"
@@ -481,6 +492,10 @@ async def tower_cell_handler(callback: CallbackQuery, state: FSMContext):
             _sessions.pop(user_id, None)
             _cancel_timeout(user_id)
             await state.clear()
+
+            # Записываем в лидерборд: победа
+            name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
+            record_game_result(user_id, name, bet, winnings)
 
             balance = pay_storage.get_balance(user_id)
             await callback.message.edit_text(
@@ -543,6 +558,10 @@ async def tower_cashout(callback: CallbackQuery, state: FSMContext):
     _sessions.pop(user_id, None)
     _cancel_timeout(user_id)
     await state.clear()
+
+    # Записываем в лидерборд: кэшаут
+    name = callback.from_user.first_name or callback.from_user.username or f"User {user_id}"
+    record_game_result(user_id, name, bet, winnings)
 
     balance = pay_storage.get_balance(user_id)
     await callback.message.edit_text(
