@@ -513,9 +513,12 @@ async def main():
     betting_game = BettingGame(bot)
     
     # Инициализация модуля лидеров
-    from leaders import setup_leaders
-    setup_leaders()  # Инициализация JSON хранилища
-    logging.info("Модуль лидеров инициализирован")
+    try:
+        from leaders import setup_leaders
+        setup_leaders()  # Инициализация JSON хранилища
+        logging.info("Модуль лидеров инициализирован")
+    except Exception as e:
+        logging.error(f"Ошибка инициализации модуля лидеров: {e}")
 
     # Подключаем все роутеры
     dp.include_router(router)
@@ -523,7 +526,14 @@ async def main():
     dp.include_router(tower_router)
     dp.include_router(referral_router)
     dp.include_router(payment_router)
-    dp.include_router(leaders_router)
+    
+    # Подключаем роутер лидеров
+    try:
+        from leaders import leaders_router
+        dp.include_router(leaders_router)
+        logging.info("Роутер лидеров подключен")
+    except Exception as e:
+        logging.error(f"Ошибка подключения роутера лидеров: {e}")
 
     # Настройка модулей
     setup_payments(bot)
@@ -562,8 +572,3 @@ async def main():
     await site.start()
 
     await asyncio.Event().wait()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
