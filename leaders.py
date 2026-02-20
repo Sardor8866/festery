@@ -1,254 +1,202 @@
-# leaders.py
-
-import json
 import logging
 from datetime import datetime, timedelta
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.enums import ParseMode
-
-# Эмодзи из main.py
-EMOJI_LEADERS = "5440539497383087970"
-EMOJI_BACK = "5906771962734057347"
-EMOJI_WALLET = "5443127283898405358"
-EMOJI_WITHDRAWAL = "5445355530111437729"
-EMOJI_STATS = "5197288647275071607"
-EMOJI_PROFILE = "5906581476639513176"
 
 leaders_router = Router()
 
-# Хранилище данных пользователей
-USER_DATA_FILE = 'users_data.json'
+# ── ID кастомных эмодзи (из main.py) ──────────────────────────────────────────
+EMOJI_LEADERS    = "5440539497383087970"
+EMOJI_BACK       = "5906771962734057347"
+EMOJI_TROPHY     = "5440539497383087970"   # 🏆  — заменишь на нужный
+EMOJI_TURNOVER   = "5197288647275071607"   # оборот
+EMOJI_WIN        = "5278467510604160626"   # выигрыш
+EMOJI_DEPOSIT    = "5443127283898405358"   # депозит
+EMOJI_WITHDRAW   = "5445355530111437729"   # вывод
+EMOJI_COIN       = "5197434882321567830"   # монета (USDT)
 
-def load_users_data():
-    """Загрузка данных пользователей"""
+# ── Типы и периоды ────────────────────────────────────────────────────────────
+LEADER_TYPES    = ["turnover", "wins", "deposits", "withdrawals"]
+LEADER_PERIODS  = ["today", "yesterday", "week", "month"]
+
+TYPE_LABELS = {
+    "turnover":    ("Оборот",    EMOJI_TURNOVER),
+    "wins":        ("Выигрыш",   EMOJI_WIN),
+    "deposits":    ("Депозиты",  EMOJI_DEPOSIT),
+    "withdrawals": ("Выводы",    EMOJI_WITHDRAW),
+}
+
+PERIOD_LABELS = {
+    "today":     "Сегодня",
+    "yesterday": "Вчера",
+    "week":      "Неделя",
+    "month":     "Месяц",
+}
+
+# Медальки для топ-3
+MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+# ── Хелпер: диапазон дат для периода ─────────────────────────────────────────
+def _period_range(period: str):
+    now   = datetime.utcnow()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "today":
+        return today, now
+    elif period == "yesterday":
+        return today - timedelta(days=1), today
+    elif period == "week":
+        return today - timedelta(days=7), now
+    elif period == "month":
+        return today - timedelta(days=30), now
+    return today, now
+
+
+# ── Получение топ-10 из storage ───────────────────────────────────────────────
+def get_top10(storage, leader_type: str, period: str) -> list[dict]:
+    """
+    Возвращает список из ≤10 записей:
+    [{"user_id": int, "name": str, "value": float}, ...]
+    отсортированных по убыванию value.
+
+    Адаптируй логику под свою реальную БД / storage.
+    Сейчас читаем из storage.users (словарь user_id -> данные пользователя).
+    """
     try:
-        with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError:
-        return {}
+        users_data = storage.users  # dict {user_id: {...}}
+    except AttributeError:
+        return []
 
-def save_users_data(data):
-    """Сохранение данных пользователей"""
-    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    start_dt, end_dt = _period_range(period)
 
-def setup_leaders():
-    """Инициализация модуля лидеров (создание файла если не существует)"""
-    try:
-        # Пробуем загрузить данные, если файла нет - создаем пустой
-        data = load_users_data()
-        if not data:
-            save_users_data({})
-        logging.info("Модуль лидеров успешно инициализирован")
-        return True
-    except Exception as e:
-        logging.error(f"Ошибка инициализации модуля лидеров: {e}")
-        return False
+    results = []
+    for uid, data in users_data.items():
+        # Определяем нужное поле
+        if leader_type == "turnover":
+            # Сумма всех ставок за период — если есть история, иначе total
+            value = float(data.get("total_bets", 0) or 0)
+        elif leader_type == "wins":
+            value = float(data.get("total_wins", 0) or 0)
+        elif leader_type == "deposits":
+            value = float(data.get("total_deposits", 0) or 0)
+        elif leader_type == "withdrawals":
+            value = float(data.get("total_withdrawals", 0) or 0)
+        else:
+            value = 0.0
 
-def update_user_stats(user_id: int, username: str = None, deposit: float = 0, turnover: float = 0, wins: float = 0):
-    """Обновление статистики пользователя"""
-    try:
-        data = load_users_data()
-        user_id_str = str(user_id)
-        
-        if user_id_str not in data:
-            data[user_id_str] = {
-                'username': username,
-                'deposit': 0,
-                'turnover': 0,
-                'wins': 0,
-                'first_seen': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-        
-        if username:
-            data[user_id_str]['username'] = username
-        
-        if deposit > 0:
-            data[user_id_str]['deposit'] = data[user_id_str].get('deposit', 0) + deposit
-        
-        if turnover > 0:
-            data[user_id_str]['turnover'] = data[user_id_str].get('turnover', 0) + turnover
-        
-        if wins > 0:
-            data[user_id_str]['wins'] = data[user_id_str].get('wins', 0) + wins
-        
-        save_users_data(data)
-        return data[user_id_str]
-    except Exception as e:
-        logging.error(f"Ошибка обновления статистики для user {user_id}: {e}")
-        return None
+        if value <= 0:
+            continue
 
-# ========== КЛАВИАТУРЫ ==========
-def get_leaders_keyboard(selected: str = 'deposit'):
-    """Клавиатура для переключения категорий лидеров"""
-    buttons = [
-        InlineKeyboardButton(
-            text=f"{'✅ ' if selected == 'deposit' else ''}📥 Депозит", 
-            callback_data="leaders_deposit"
-        ),
-        InlineKeyboardButton(
-            text=f"{'✅ ' if selected == 'turnover' else ''}💱 Оборот", 
-            callback_data="leaders_turnover"
-        ),
-        InlineKeyboardButton(
-            text=f"{'✅ ' if selected == 'wins' else ''}🥳 Выигрыши", 
-            callback_data="leaders_wins"
-        ),
-    ]
-    
+        name = data.get("first_name") or data.get("username") or f"User {uid}"
+        results.append({"user_id": uid, "name": str(name), "value": value})
+
+    results.sort(key=lambda x: x["value"], reverse=True)
+    return results[:10]
+
+
+# ── Клавиатура лидеров ────────────────────────────────────────────────────────
+def get_leaders_keyboard(active_type: str, active_period: str) -> InlineKeyboardMarkup:
+    def type_btn(t_id: str):
+        label, emoji_id = TYPE_LABELS[t_id]
+        mark  = "✦ " if t_id == active_type else ""
+        return InlineKeyboardButton(
+            text=f"{mark}{label}",
+            callback_data=f"leaders:{t_id}:{active_period}",
+            icon_custom_emoji_id=emoji_id
+        )
+
+    def period_btn(p_id: str):
+        label = PERIOD_LABELS[p_id]
+        mark  = "✦ " if p_id == active_period else ""
+        return InlineKeyboardButton(
+            text=f"{mark}{label}",
+            callback_data=f"leaders:{active_type}:{p_id}"
+        )
+
     return InlineKeyboardMarkup(inline_keyboard=[
-        buttons,  # Первый ряд - три кнопки
-        [  # Второй ряд - кнопка назад
-            InlineKeyboardButton(
-                text="◀️ На главную", 
-                callback_data="back_to_main",
-                icon_custom_emoji_id=EMOJI_BACK
-            )
-        ]
+        # Ряд 1: типы
+        [type_btn("turnover"), type_btn("wins"), type_btn("deposits"), type_btn("withdrawals")],
+        # Ряд 2: периоды
+        [period_btn("today"), period_btn("yesterday"), period_btn("week"), period_btn("month")],
+        # Ряд 3: назад
+        [InlineKeyboardButton(
+            text="Назад",
+            callback_data="back_to_main",
+            icon_custom_emoji_id=EMOJI_BACK
+        )]
     ])
 
-# ========== ФОРМАТИРОВАНИЕ ТОПА ==========
-def format_leaderboard(users_data, key: str):
-    """Форматирование топа 10 пользователей"""
-    # Фильтруем пользователей с положительными значениями
-    filtered_data = {
-        user_id: data for user_id, data in users_data.items() 
-        if data.get(key, 0) > 0
-    }
-    
-    # Сортируем по убыванию
-    sorted_leaders = sorted(
-        filtered_data.items(),
-        key=lambda item: item[1].get(key, 0),
-        reverse=True
-    )[:10]
 
-    if not sorted_leaders:
-        return "<blockquote>📭 Пока нет данных для отображения</blockquote>"
+# ── Текст лидеров ─────────────────────────────────────────────────────────────
+def build_leaders_text(storage, leader_type: str, period: str) -> str:
+    type_label, type_emoji_id = TYPE_LABELS[leader_type]
+    period_label = PERIOD_LABELS[period]
+    top = get_top10(storage, leader_type, period)
 
-    # Заголовки для разных категорий
-    titles = {
-        'deposit': 'ТОП-10 ПО ДЕПОЗИТАМ 📥',
-        'turnover': 'ТОП-10 ПО ОБОРОТУ 💱',
-        'wins': 'ТОП-10 ПО ВЫИГРЫШАМ 🥳'
-    }
-    
-    # Эмодзи для топ-3
-    top_emojis = ["🥇", "🥈", "🥉"]
-    
-    text = f"<tg-emoji emoji-id=\"{EMOJI_LEADERS}\">🏆</tg-emoji> <b>{titles.get(key, '')}</b>\n\n"
-    text += "<blockquote>"
-    
-    for i, (user_id, data) in enumerate(sorted_leaders, 1):
-        # Определяем эмодзи для позиции
-        if i <= 3:
-            position = top_emojis[i-1]
-        else:
-            position = f"{i}."
-        
-        # Получаем username или ID
-        username = data.get('username')
-        if username:
-            display_name = f"@{username}"
-        else:
-            # Скрываем часть ID для безопасности
-            user_id_str = str(user_id)
-            display_name = f"ID: {user_id_str[:4]}...{user_id_str[-4:]}"
-        
-        # Форматируем значение
-        value = data.get(key, 0)
-        if value >= 1000000:
-            value_str = f"{value/1000000:.2f}M"
-        elif value >= 1000:
-            value_str = f"{value/1000:.2f}K"
-        else:
-            value_str = f"{value:.2f}"
-        
-        text += f"{position} <b>{display_name}</b> — <code>{value_str}</code> <tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji>\n"
-    
-    text += "</blockquote>"
-    
-    # Добавляем футер с поддержкой
-    text += (
-        f"\n<tg-emoji emoji-id=\"5907025791006283345\">💬</tg-emoji> "
-        f"<b><a href=\"https://t.me/your_support\">Тех. поддержка</a> | "
-        f"<a href=\"https://t.me/your_chat\">Наш чат</a> | "
-        f"<a href=\"https://t.me/your_news\">Новости</a></b>"
+    header = (
+        f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> '
+        f'<b>Таблица лидеров</b>\n'
+        f'<blockquote>'
+        f'<tg-emoji emoji-id="{type_emoji_id}">⭐</tg-emoji> <b>{type_label}</b> · {period_label}'
+        f'</blockquote>\n\n'
     )
-    
-    return text
 
-# ========== ОБРАБОТЧИКИ ==========
-async def show_leaders(callback: CallbackQuery, state: FSMContext):
-    """Показать топ по депозитам (по умолчанию)"""
-    await state.clear()
-    
-    users_data = load_users_data()
-    text = format_leaderboard(users_data, 'deposit')
-    
-    await callback.message.edit_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_leaders_keyboard('deposit')
-    )
+    if not top:
+        body = '<i>Пока нет данных за выбранный период.</i>\n'
+    else:
+        lines = []
+        for i, entry in enumerate(top, start=1):
+            medal = MEDALS.get(i, f"<b>{i}.</b>")
+            name  = entry["name"]
+            value = entry["value"]
+            lines.append(
+                f'{medal} <b>{name}</b> — '
+                f'<code>{value:,.2f}</code>'
+                f'<tg-emoji emoji-id="{EMOJI_COIN}">💰</tg-emoji>'
+            )
+        body = "\n".join(lines) + "\n"
+
+    return header + body
+
+
+# ── Хендлер: первый вход (callback_data="leaders") ────────────────────────────
+async def show_leaders(callback: CallbackQuery, storage_obj):
+    default_type   = "turnover"
+    default_period = "today"
+    text = build_leaders_text(storage_obj, default_type, default_period)
+    kb   = get_leaders_keyboard(default_type, default_period)
+    await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
     await callback.answer()
 
-@leaders_router.callback_query(F.data.startswith("leaders_"))
-async def switch_leaders_category(callback: CallbackQuery):
-    """Переключение между категориями лидеров"""
-    
-    # Определяем выбранную категорию
-    key = callback.data.replace("leaders_", "")
-    
-    # Проверяем валидность категории
-    if key not in ['deposit', 'turnover', 'wins']:
-        await callback.answer("❌ Неверная категория")
+
+# ── Хендлер: переключение ─────────────────────────────────────────────────────
+@leaders_router.callback_query(F.data.startswith("leaders:"))
+async def leaders_switch(callback: CallbackQuery):
+    # callback_data = "leaders:{type}:{period}"
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer()
         return
-    
-    users_data = load_users_data()
-    text = format_leaderboard(users_data, key)
-    
-    await callback.message.edit_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_leaders_keyboard(key)
-    )
+
+    _, leader_type, period = parts
+
+    if leader_type not in LEADER_TYPES or period not in LEADER_PERIODS:
+        await callback.answer("Неверные параметры", show_alert=True)
+        return
+
+    # Импортируем storage из payments (как в main.py)
+    try:
+        from payments import storage as payment_storage
+    except ImportError:
+        await callback.answer("Ошибка загрузки данных", show_alert=True)
+        return
+
+    try:
+        text = build_leaders_text(payment_storage, leader_type, period)
+        kb   = get_leaders_keyboard(leader_type, period)
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    except Exception as e:
+        logging.error(f"Leaders error: {e}")
+
     await callback.answer()
-
-# ========== ФУНКЦИИ ДЛЯ ИНТЕГРАЦИИ ==========
-def update_deposit_stats(user_id: int, amount: float, username: str = None):
-    """Обновление статистики депозитов (из платежного модуля)"""
-    return update_user_stats(user_id, username, deposit=amount)
-
-def update_turnover_stats(user_id: int, amount: float, username: str = None):
-    """Обновление статистики оборота (из игрового модуля)"""
-    return update_user_stats(user_id, username, turnover=amount)
-
-def update_wins_stats(user_id: int, amount: float, username: str = None):
-    """Обновление статистики выигрышей (из игрового модуля)"""
-    return update_user_stats(user_id, username, wins=amount)
-
-# ========== АДМИН-КОМАНДА ДЛЯ ПРОСМОТРА СТАТИСТИКИ ==========
-@leaders_router.message(F.text == "/stats")
-async def show_stats(message: Message):
-    """Админ-команда для просмотра статистики"""
-    users_data = load_users_data()
-    
-    total_users = len(users_data)
-    total_deposits = sum(data.get('deposit', 0) for data in users_data.values())
-    total_turnover = sum(data.get('turnover', 0) for data in users_data.values())
-    total_wins = sum(data.get('wins', 0) for data in users_data.values())
-    
-    stats_text = (
-        f"<b>📊 СТАТИСТИКА БОТА</b>\n\n"
-        f"👥 Всего пользователей: <code>{total_users}</code>\n"
-        f"📥 Общий депозит: <code>{total_deposits:.2f}</code> 💰\n"
-        f"💱 Общий оборот: <code>{total_turnover:.2f}</code> 💰\n"
-        f"🥳 Общий выигрыш: <code>{total_wins:.2f}</code> 💰\n"
-    )
-    
-    await message.answer(stats_text, parse_mode=ParseMode.HTML)
