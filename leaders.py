@@ -28,40 +28,59 @@ def load_users_data():
             return json.load(f)
     except FileNotFoundError:
         return {}
+    except json.JSONDecodeError:
+        return {}
 
 def save_users_data(data):
     """Сохранение данных пользователей"""
     with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
+def setup_leaders():
+    """Инициализация модуля лидеров (создание файла если не существует)"""
+    try:
+        # Пробуем загрузить данные, если файла нет - создаем пустой
+        data = load_users_data()
+        if not data:
+            save_users_data({})
+        logging.info("Модуль лидеров успешно инициализирован")
+        return True
+    except Exception as e:
+        logging.error(f"Ошибка инициализации модуля лидеров: {e}")
+        return False
+
 def update_user_stats(user_id: int, username: str = None, deposit: float = 0, turnover: float = 0, wins: float = 0):
     """Обновление статистики пользователя"""
-    data = load_users_data()
-    user_id_str = str(user_id)
-    
-    if user_id_str not in data:
-        data[user_id_str] = {
-            'username': username,
-            'deposit': 0,
-            'turnover': 0,
-            'wins': 0,
-            'first_seen': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-    
-    if username:
-        data[user_id_str]['username'] = username
-    
-    if deposit > 0:
-        data[user_id_str]['deposit'] = data[user_id_str].get('deposit', 0) + deposit
-    
-    if turnover > 0:
-        data[user_id_str]['turnover'] = data[user_id_str].get('turnover', 0) + turnover
-    
-    if wins > 0:
-        data[user_id_str]['wins'] = data[user_id_str].get('wins', 0) + wins
-    
-    save_users_data(data)
-    return data[user_id_str]
+    try:
+        data = load_users_data()
+        user_id_str = str(user_id)
+        
+        if user_id_str not in data:
+            data[user_id_str] = {
+                'username': username,
+                'deposit': 0,
+                'turnover': 0,
+                'wins': 0,
+                'first_seen': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        if username:
+            data[user_id_str]['username'] = username
+        
+        if deposit > 0:
+            data[user_id_str]['deposit'] = data[user_id_str].get('deposit', 0) + deposit
+        
+        if turnover > 0:
+            data[user_id_str]['turnover'] = data[user_id_str].get('turnover', 0) + turnover
+        
+        if wins > 0:
+            data[user_id_str]['wins'] = data[user_id_str].get('wins', 0) + wins
+        
+        save_users_data(data)
+        return data[user_id_str]
+    except Exception as e:
+        logging.error(f"Ошибка обновления статистики для user {user_id}: {e}")
+        return None
 
 # ========== КЛАВИАТУРЫ ==========
 def get_leaders_keyboard(selected: str = 'deposit'):
@@ -164,7 +183,6 @@ def format_leaderboard(users_data, key: str):
     return text
 
 # ========== ОБРАБОТЧИКИ ==========
-@leaders_router.callback_query(F.data == "leaders")
 async def show_leaders(callback: CallbackQuery, state: FSMContext):
     """Показать топ по депозитам (по умолчанию)"""
     await state.clear()
@@ -204,19 +222,19 @@ async def switch_leaders_category(callback: CallbackQuery):
 # ========== ФУНКЦИИ ДЛЯ ИНТЕГРАЦИИ ==========
 def update_deposit_stats(user_id: int, amount: float, username: str = None):
     """Обновление статистики депозитов (из платежного модуля)"""
-    update_user_stats(user_id, username, deposit=amount)
+    return update_user_stats(user_id, username, deposit=amount)
 
 def update_turnover_stats(user_id: int, amount: float, username: str = None):
     """Обновление статистики оборота (из игрового модуля)"""
-    update_user_stats(user_id, username, turnover=amount)
+    return update_user_stats(user_id, username, turnover=amount)
 
 def update_wins_stats(user_id: int, amount: float, username: str = None):
     """Обновление статистики выигрышей (из игрового модуля)"""
-    update_user_stats(user_id, username, wins=amount)
+    return update_user_stats(user_id, username, wins=amount)
 
 # ========== АДМИН-КОМАНДА ДЛЯ ПРОСМОТРА СТАТИСТИКИ ==========
 @leaders_router.message(F.text == "/stats")
-async def show_stats(message):
+async def show_stats(message: Message):
     """Админ-команда для просмотра статистики"""
     users_data = load_users_data()
     
