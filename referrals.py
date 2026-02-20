@@ -20,13 +20,13 @@ REFERRALS_FILE     = "referrals.json"
 # ──────────────────────────────────────────────
 EMOJI_PARTNERS   = "5906986955911993888"
 EMOJI_BACK       = "5906771962734057347"
-EMOJI_WALLET     = "5443127283898405358"
+EMOJI_WALLET     = "5445355530111437729"
 EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_LEADERS    = "5440539497383087970"
-EMOJI_STATS      = "5197288647275071607"
+EMOJI_STATS      = "5231200819986047254"
 EMOJI_COIN       = "5197434882321567830"
 EMOJI_CHECK      = "5197269100878907942"
-EMOJI_NUMBER     = "5456140674028019486"
+EMOJI_NUMBER     = "5271604874419647061"
 EMOJI_REF_USER   = "5906581476639513176"   # замени на нужный
 
 
@@ -282,19 +282,19 @@ def text_referrals_main(user_id: int) -> str:
     return (
         f"{e(EMOJI_PARTNERS,'🤝')} <b>Реферальная программа</b>\n\n"
         f"<blockquote>"
-        f"👥 <b>Приглашено:</b> <code>{cnt} {ref_word}</code>\n"
-        f"{e(EMOJI_WALLET,'💰')} <b>Реф-баланс:</b> <code>{stats['ref_balance']:.4f}</code> "
-        f"{e(EMOJI_COIN,'💎')} USDT\n"
-        f"{e(EMOJI_LEADERS,'👑')} <b>Всего заработано:</b> <code>{stats['total_earned']:.4f}</code> "
-        f"{e(EMOJI_COIN,'💎')} USDT\n"
+        f"<tg-emoji emoji-id=\"5332724926216428039\">🎰</tg-emoji><b>Приглашено:</b> <code>{cnt} {ref_word}</code>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji><b>Реф-баланс:</b> <code>{stats['ref_balance']:.4f}</code> "
+        f"<tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"5427168083074628963\">🎰</tg-emoji><b>Заработано:</b> <code>{stats['total_earned']:.4f}</code> "
+        f"{e(EMOJI_COIN,'💎')}\n"
         f"{e(EMOJI_WITHDRAWAL,'📤')} <b>Выведено:</b> <code>{stats['total_withdrawn']:.4f}</code> "
-        f"{e(EMOJI_COIN,'💎')} USDT\n"
+        f"{e(EMOJI_COIN,'💎')}\n"
         f"</blockquote>\n\n"
         f"<blockquote>"
-        f"💸 <b>Мин. вывод:</b> <code>{MIN_REF_WITHDRAWAL:.2f} USDT</code>\n"
+        f"<tg-emoji emoji-id=\"5294167145079395967\">🎰</tg-emoji><b>Получайте 2% от выигрышей друзей!</b>\n"
         f"</blockquote>\n\n"
         f"<blockquote>"
-        f"🔗 <b>Ваша ссылка:</b>\n"
+        f"<tg-emoji emoji-id=\"5271604874419647061\">🎰</tg-emoji><b>Ваша ссылка:</b>\n"
         f"<code>{link}</code>"
         f"</blockquote>"
     )
@@ -315,10 +315,10 @@ def text_ref_stats(user_id: int) -> str:
     return (
         f"{e(EMOJI_STATS,'📊')} <b>Детальная статистика</b>\n\n"
         f"<blockquote>"
-        f"{e(EMOJI_WALLET,'💰')} Реф-баланс: <code>{stats['ref_balance']:.4f} USDT</code>\n"
-        f"{e(EMOJI_LEADERS,'👑')} Всего заработано: <code>{stats['total_earned']:.4f} USDT</code>\n"
-        f"{e(EMOJI_WITHDRAWAL,'📤')} Всего выведено: <code>{stats['total_withdrawn']:.4f} USDT</code>\n"
-        f"👥 Всего рефералов: <code>{stats['referrals_count']}</code>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Реф-баланс: <code>{stats['ref_balance']:.4f}<tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
+        f"<tg-emoji emoji-id=\"5427168083074628963\">🎰</tg-emoji>Заработано: <code>{stats['total_earned']:.4f} <tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
+        f"{e(EMOJI_WITHDRAWAL,'📤')}Выведено: <code>{stats['total_withdrawn']:.4f} <tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
+        f"<tg-emoji emoji-id=\"5332724926216428039\">🎰</tg-emoji>рефералов: <code>{stats['referrals_count']}</code>\n"
         f"</blockquote>\n\n"
         f"<blockquote>"
         f"<b>Последние рефералы:</b>\n"
@@ -330,15 +330,8 @@ def text_ref_stats(user_id: int) -> str:
 def text_ref_link(user_id: int) -> str:
     link = get_referral_link(user_id)
     return (
-        f"🔗 <b>Реферальная ссылка</b>\n\n"
-        f"<blockquote>"
-        f"Отправьте ссылку друзьям — получайте "
-        f"<b>{REFERRAL_PERCENT}%</b> с каждой их ставки!\n\n"
-        f"<code>{link}</code>"
-        f"</blockquote>\n\n"
-        f"<blockquote>"
-        f"🎁 <b>Чем больше рефералов — тем больше пассивный доход!</b>"
-        f"</blockquote>"
+        f"<blockquote><tg-emoji emoji-id=\"5271604874419647061\">🎰</tg-emoji><b>Реферальная ссылка</b></blockquote>\n\n"
+        f"<blockquote><code>{link}</code></blockquote>"
     )
 
 
@@ -388,11 +381,7 @@ async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(ReferralWithdraw.entering_amount)
     await callback.message.edit_text(
         f"{e(EMOJI_WITHDRAWAL,'📤')} <b>Вывод реферального баланса</b>\n\n"
-        f"<blockquote>"
-        f"{e(EMOJI_WALLET,'💰')} Доступно: <code>{ref_balance:.4f} USDT</code>\n"
-        f"💸 Минимум: <code>{MIN_REF_WITHDRAWAL:.2f} USDT</code>"
-        f"</blockquote>\n\n"
-        f"<i>Введите сумму для вывода:</i>",
+        f"<blockauote><i><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму для вывода:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=kb_ref_cancel()
     )
@@ -413,7 +402,7 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
 
     if amount < MIN_REF_WITHDRAWAL:
         await message.answer(
-            f"❌ <b>Минимальная сумма:</b> <code>{MIN_REF_WITHDRAWAL:.2f} USDT</code>",
+            f"❌ <b>Минимальная сумма:</b> <code>{MIN_REF_WITHDRAWAL:.2f}</code>",
             parse_mode=ParseMode.HTML,
             reply_markup=kb_ref_cancel()
         )
@@ -423,7 +412,7 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
     if amount > ref_balance:
         await message.answer(
             f"❌ <b>Недостаточно средств.</b>\n"
-            f"Реф-баланс: <code>{ref_balance:.4f} USDT</code>",
+            f"Реф-баланс: <code>{ref_balance:.4f}</code>",
             parse_mode=ParseMode.HTML,
             reply_markup=kb_ref_cancel()
         )
@@ -457,11 +446,7 @@ async def ref_withdraw_amount(message: Message, state: FSMContext):
     new_ref_balance = referral_storage.get_ref_balance(message.from_user.id)
 
     await message.answer(
-        f"✅ <b>Успешно выведено!</b>\n\n"
-        f"<blockquote>"
-        f"➕ На игровой баланс: <code>{amount:.4f} USDT</code>\n"
-        f"{e(EMOJI_WALLET,'💰')} Остаток реф-баланса: <code>{new_ref_balance:.4f} USDT</code>"
-        f"</blockquote>",
+        f"<tg-emoji emoji-id=\"5206607081334906820\">🎰</tg-emoji><b>Успешно выведено!</b>\n\n",
         parse_mode=ParseMode.HTML,
         reply_markup=kb_ref_back()
     )
@@ -501,11 +486,7 @@ async def process_start_referral(message: Message, start_param: str) -> bool:
             await _bot.send_message(
                 chat_id=referrer_id,
                 text=(
-                    f"👥 <b>Новый реферал!</b>\n\n"
-                    f"<blockquote>"
-                    f"Пользователь <code>{new_user_id}</code> зарегистрировался по вашей ссылке.\n"
-                    f"Вы будете получать <b>{REFERRAL_PERCENT}%</b> с каждой его ставки."
-                    f"</blockquote>"
+                    f"<blockquote><tg-emoji emoji-id=\"5222079954421818267\">🎰</tg-emoji><b>Новый реферал!</b></blockquote>\n\n"
                 ),
                 parse_mode=ParseMode.HTML
             )
