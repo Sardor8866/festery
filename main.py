@@ -93,16 +93,11 @@ betting_game = None
 
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
 def sync_balances(user_id: int):
-    global betting_game
-    if betting_game and storage:
-        payment_balance = storage.get_balance(user_id)
-        game_balance    = betting_game.get_balance(user_id)
-        if abs(payment_balance - game_balance) > 0.01:
-            logging.info(f"Синхронизация баланса для user {user_id}: payment={payment_balance}, game={game_balance}")
-            betting_game.user_balances[user_id] = payment_balance
-            betting_game.save_balances()
-        return payment_balance
-    return 0
+    """
+    Баланс теперь хранится только в payments.storage.
+    Функция оставлена для совместимости — просто возвращает баланс.
+    """
+    return storage.get_balance(user_id)
 
 
 # ========== КЛАВИАТУРЫ ==========
@@ -269,10 +264,6 @@ async def cmd_add_balance(message: Message):
     storage.get_user(target_id)
     storage.add_balance(target_id, amount)
     new_balance = storage.get_balance(target_id)
-
-    if betting_game:
-        betting_game.user_balances[target_id] = new_balance
-        betting_game.save_balances()
 
     await message.answer(
         f"<b>✅ Баланс выдан</b>\n\n"
