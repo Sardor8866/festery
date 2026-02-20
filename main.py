@@ -96,19 +96,13 @@ def is_balance_command(text: str) -> bool:
     """Проверяет, является ли текст командой баланса (точное совпадение)."""
     if not text:
         return False
-    # Убираем слеш если есть
     t = text.lstrip('/')
-    # Точные совпадения (регистр не важен)
     commands = {'б', 'b', 'бал', 'bal', 'баланс', 'balance'}
     return t.lower() in commands
 
 
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
 def sync_balances(user_id: int):
-    """
-    Баланс теперь хранится только в payments.storage.
-    Функция оставлена для совместимости — просто возвращает баланс.
-    """
     return storage.get_balance(user_id)
 
 
@@ -171,10 +165,20 @@ def get_cancel_menu():
 
 
 def get_balance_menu():
+    """Кнопки-ссылки: при нажатии переводят в бота и сразу открывают ввод суммы."""
+    bot_username = os.getenv("BOT_USERNAME", "your_bot")
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Пополнить", callback_data="deposit",  icon_custom_emoji_id=EMOJI_WALLET),
-            InlineKeyboardButton(text="Вывести",   callback_data="withdraw", icon_custom_emoji_id=EMOJI_WITHDRAWAL)
+            InlineKeyboardButton(
+                text="Пополнить",
+                url=f"https://t.me/{bot_username}?start=deposit",
+                icon_custom_emoji_id=EMOJI_WALLET
+            ),
+            InlineKeyboardButton(
+                text="Вывести",
+                url=f"https://t.me/{bot_username}?start=withdraw",
+                icon_custom_emoji_id=EMOJI_WITHDRAWAL
+            )
         ]
     ])
 
@@ -232,19 +236,42 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 async def cmd_start(message: Message):
     try:
         args = message.text.split(maxsplit=1)
-        has_ref = len(args) > 1 and args[1].startswith("ref_")
+        param = args[1] if len(args) > 1 else ""
 
-        if has_ref:
-            # Пришёл по реф-ссылке — пробуем зарегистрировать реферала
-            await process_start_referral(message, args[1])
+        # ── Пополнение через ссылку ─────────────────────────────────────
+        if param == "deposit":
+            storage.get_user(message.from_user.id)
+            storage.set_pending(message.from_user.id, 'deposit')
+            await message.answer(
+                f"<b><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Пополнение баланса</b>\n\n"
+                f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму пополнения:</i></blockquote>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_cancel_menu()
+            )
+            return
+
+        # ── Вывод через ссылку ──────────────────────────────────────────
+        elif param == "withdraw":
+            storage.get_user(message.from_user.id)
+            storage.set_pending(message.from_user.id, 'withdraw')
+            await message.answer(
+                f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
+                f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму вывода:</i></blockquote>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_cancel_menu()
+            )
+            return
+
+        # ── Реферальная ссылка ──────────────────────────────────────────
+        elif param.startswith("ref_"):
+            await process_start_referral(message, param)
+
+        # ── Обычный старт ───────────────────────────────────────────────
         else:
-            # Пришёл сам, без ссылки — помечаем как органического навсегда
             referral_storage.mark_organic(message.from_user.id)
 
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
-
-        # Сохраняем имя для таблицы лидеров
         update_user_name(storage, message.from_user.id, message.from_user.first_name or "")
 
         await message.answer_sticker(sticker=WELCOME_STICKER_ID)
@@ -312,7 +339,6 @@ async def profile_callback(callback: CallbackQuery, state: FSMContext):
     join_date     = datetime.strptime(join_date_str, '%Y-%m-%d')
     days_in_project = (datetime.now() - join_date).days
 
-    # Обновляем имя при каждом открытии профиля
     update_user_name(storage, callback.from_user.id, callback.from_user.first_name or "")
 
     await callback.message.edit_text(
@@ -389,7 +415,7 @@ async def handle_cancel_bet(callback: CallbackQuery, state: FSMContext):
     await cancel_bet(callback, state, betting_game)
 
 
-# ========== ПОПОЛНЕНИЕ ==========
+# ========== ПОПОЛНЕНИЕ (из профиля) ==========
 @router.callback_query(F.data == "deposit")
 async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
@@ -403,11 +429,10 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ВЫВОД ==========
+# ========== ВЫВОД (из профиля) ==========
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    balance = sync_balances(callback.from_user.id)
     storage.set_pending(callback.from_user.id, 'withdraw')
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
@@ -434,10 +459,10 @@ async def tower_command_handler(message: Message, state: FSMContext):
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
 
-    # ── КОМАНДА БАЛАНСА ────────────────────────────────────────────────
+    # ── КОМАНДА БАЛАНСА — отвечаем реплаем на сообщение пользователя ───
     if is_balance_command(message.text):
         balance = sync_balances(message.from_user.id)
-        await message.answer(
+        await message.reply(
             f"<blockquote><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> <b>Ваш баланс</b>\n\n"
             f"<b><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: "
             f"<code>{balance:,.2f}</code> "
@@ -446,15 +471,14 @@ async def handle_text_message(message: Message, state: FSMContext):
             reply_markup=get_balance_menu()
         )
         return
-    # ───────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────────────
 
     current_state = await state.get_state()
 
-    # ── ПЕРВЫМ: вывод реферального баланса ─────────────────────────────
+    # ── Вывод реферального баланса ──────────────────────────────────────
     if current_state == ReferralWithdraw.entering_amount.state:
         await ref_withdraw_amount(message, state)
         return
-    # ───────────────────────────────────────────────────────────────────
 
     # Ставка в игре Мины
     if current_state == MinesGame.choosing_bet:
@@ -540,7 +564,7 @@ async def main():
     dp.include_router(tower_router)
     dp.include_router(referral_router)
     dp.include_router(payment_router)
-    dp.include_router(leaders_router)   # ← модуль лидеров
+    dp.include_router(leaders_router)
 
     setup_payments(bot)
     setup_referrals(bot)
