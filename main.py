@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-from datetime import datetime
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
@@ -40,10 +39,7 @@ from referrals import (
 )
 
 # Импортируем модуль лидеров
-from leaders import (
-    leaders_router, setup_leaders, update_deposit_stats, 
-    update_turnover_stats, update_wins_stats
-)
+from leaders import leaders_router, show_leaders
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -91,7 +87,7 @@ ADMIN_IDS = [8118184388]
 # Роутер
 router = Router()
 
-# Экземпляры игр и хранилищ
+# Экземпляр игры
 betting_game = None
 
 
@@ -182,7 +178,7 @@ def get_games_menu_text(user_id: int):
     balance = sync_balances(user_id)
     return (
         f"<blockquote><tg-emoji emoji-id=\"{EMOJI_GAMES}\">🎮</tg-emoji> <b>Игры</b></blockquote>\n\n"
-        f"<blockquote><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></blockquote>\n\n"
+        f"<blockquote><tg-emoji emoji-id=\"5278467510604160626\">🎮</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎮</tg-emoji></blockquote>\n\n"
         f"<blockquote><b>Выберите игру:</b></blockquote>\n\n"
         f"<tg-emoji emoji-id=\"5907025791006283345\">💬</tg-emoji> <b><a href=\"https://t.me/your_support\">Тех. поддержка</a> | <a href=\"https://t.me/your_chat\">Наш чат</a> | <a href=\"https://t.me/your_news\">Новости</a></b>\n"
     )
@@ -320,14 +316,6 @@ async def games_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ========== ЛИДЕРЫ ==========
-@router.callback_query(F.data == "leaders")
-async def leaders_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    from leaders import show_leaders
-    await show_leaders(callback, state)
-
-
 # ========== МИНЫ — ВХОД ==========
 @router.callback_query(F.data == "mines_menu")
 async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
@@ -456,7 +444,7 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     # Числовой ввод
     try:
-        amount = float(message.text)
+        float(message.text)
         if current_state:
             from game import process_bet_amount
             await process_bet_amount(message, state, betting_game)
@@ -464,6 +452,13 @@ async def handle_text_message(message: Message, state: FSMContext):
             await handle_amount_input(message)
     except ValueError:
         pass
+
+
+# ========== ЛИДЕРЫ ==========
+@router.callback_query(F.data == "leaders")
+async def leaders_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await show_leaders(callback, storage)
 
 
 # ========== О ПРОЕКТЕ ==========
@@ -503,49 +498,29 @@ async def main():
     global betting_game
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher(storage=MemoryStorage())
+    dp  = Dispatcher(storage=MemoryStorage())
 
     bot_info = await bot.get_me()
     os.environ["BOT_USERNAME"] = bot_info.username
     logging.info(f"Бот запущен как @{bot_info.username}")
 
-    # Инициализация игр
     betting_game = BettingGame(bot)
-    
-    # Инициализация модуля лидеров
-    try:
-        from leaders import setup_leaders
-        setup_leaders()  # Инициализация JSON хранилища
-        logging.info("Модуль лидеров инициализирован")
-    except Exception as e:
-        logging.error(f"Ошибка инициализации модуля лидеров: {e}")
 
-    # Подключаем все роутеры
     dp.include_router(router)
     dp.include_router(mines_router)
     dp.include_router(tower_router)
     dp.include_router(referral_router)
     dp.include_router(payment_router)
-    
-    # Подключаем роутер лидеров
-    try:
-        from leaders import leaders_router
-        dp.include_router(leaders_router)
-        logging.info("Роутер лидеров подключен")
-    except Exception as e:
-        logging.error(f"Ошибка подключения роутера лидеров: {e}")
+    dp.include_router(leaders_router)   # ← модуль лидеров
 
-    # Настройка модулей
     setup_payments(bot)
     setup_referrals(bot)
 
-    # Настройка вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
 
     logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
 
-    # Создание веб-приложения
     app = web.Application()
 
     async def webhook_handler(request):
@@ -572,3 +547,8 @@ async def main():
     await site.start()
 
     await asyncio.Event().wait()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
