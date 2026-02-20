@@ -41,7 +41,8 @@ from referrals import (
 
 # Импортируем модуль лидеров
 from leaders import (
-    leaders_router, setup_leaders, update_game_stats, update_payment_stats
+    leaders_router, setup_leaders, update_deposit_stats, 
+    update_turnover_stats, update_wins_stats
 )
 
 # Настройки
@@ -92,7 +93,6 @@ router = Router()
 
 # Экземпляры игр и хранилищ
 betting_game = None
-leaders_storage = None
 
 
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
@@ -320,6 +320,14 @@ async def games_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ========== ЛИДЕРЫ ==========
+@router.callback_query(F.data == "leaders")
+async def leaders_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    from leaders import show_leaders
+    await show_leaders(callback, state)
+
+
 # ========== МИНЫ — ВХОД ==========
 @router.callback_query(F.data == "mines_menu")
 async def mines_menu_callback(callback: CallbackQuery, state: FSMContext):
@@ -458,21 +466,6 @@ async def handle_text_message(message: Message, state: FSMContext):
         pass
 
 
-# ========== ОБРАБОТЧИКИ ЛИДЕРОВ ==========
-@router.callback_query(F.data == "leaders")
-async def leaders_menu_callback(callback: CallbackQuery, state: FSMContext):
-    """Показать меню лидеров"""
-    from leaders import show_leaders_menu
-    await show_leaders_menu(callback, state)
-
-
-@router.callback_query(F.data.startswith("leaders_"))
-async def leaders_handler(callback: CallbackQuery):
-    """Обработка всех callback'ов лидеров"""
-    from leaders import leaders_category_handler
-    await leaders_category_handler(callback)
-
-
 # ========== О ПРОЕКТЕ ==========
 @router.callback_query(F.data == "about")
 async def about_callback(callback: CallbackQuery, state: FSMContext):
@@ -507,7 +500,7 @@ async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
 
 # ========== ЗАПУСК ==========
 async def main():
-    global betting_game, leaders_storage
+    global betting_game
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
@@ -520,7 +513,8 @@ async def main():
     betting_game = BettingGame(bot)
     
     # Инициализация модуля лидеров
-    leaders_storage = setup_leaders(storage)
+    from leaders import setup_leaders
+    setup_leaders()  # Инициализация JSON хранилища
     logging.info("Модуль лидеров инициализирован")
 
     # Подключаем все роутеры
