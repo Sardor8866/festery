@@ -91,6 +91,18 @@ router = Router()
 betting_game = None
 
 
+# ========== ПРОВЕРКА КОМАНДЫ БАЛАНСА ==========
+def is_balance_command(text: str) -> bool:
+    """Проверяет, является ли текст командой баланса (точное совпадение)."""
+    if not text:
+        return False
+    # Убираем слеш если есть
+    t = text.lstrip('/')
+    # Точные совпадения (регистр не важен)
+    commands = {'б', 'b', 'бал', 'bal', 'баланс', 'balance'}
+    return t.lower() in commands
+
+
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
 def sync_balances(user_id: int):
     """
@@ -156,6 +168,15 @@ def get_cancel_menu():
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="Отмена", callback_data="profile", icon_custom_emoji_id=EMOJI_BACK)
     ]])
+
+
+def get_balance_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Пополнить", callback_data="deposit",  icon_custom_emoji_id=EMOJI_WALLET),
+            InlineKeyboardButton(text="Вывести",   callback_data="withdraw", icon_custom_emoji_id=EMOJI_WITHDRAWAL)
+        ]
+    ])
 
 
 # ========== ТЕКСТЫ ==========
@@ -412,6 +433,20 @@ async def tower_command_handler(message: Message, state: FSMContext):
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
+
+    # ── КОМАНДА БАЛАНСА ────────────────────────────────────────────────
+    if is_balance_command(message.text):
+        balance = sync_balances(message.from_user.id)
+        await message.answer(
+            f"<blockquote><tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> <b>Ваш баланс</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: "
+            f"<code>{balance:,.2f}</code> "
+            f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></b></blockquote>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_balance_menu()
+        )
+        return
+    # ───────────────────────────────────────────────────────────────────
 
     current_state = await state.get_state()
 
