@@ -24,22 +24,8 @@ WITHDRAWAL_COOLDOWN = 180
 INVOICE_LIFETIME = 300
 
 # Эмодзи
-EMOJI_BACK = "5906771962734057347"
-EMOJI_SUCCESS = "5199436362280976367"
-EMOJI_ERROR = "5197923386472879129"
-EMOJI_LINK = "5271604874419647061"
-EMOJI_MONEY = "5906771962734057347"
-EMOJI_WALLET = "5906771962734057347"
-EMOJI_CLOCK = "5906771962734057347"
-EMOJI_CHECK = "5906771962734057347"
-EMOJI_CROSS = "5906771962734057347"
-EMOJI_BANK = "5906771962734057347"
-EMOJI_ARROW = "5906771962734057347"
-EMOJI_STAR = "5906771962734057347"
-EMOJI_FIRE = "5906771962734057347"
-EMOJI_GEM = "5906771962734057347"
-EMOJI_ROCKET = "5906771962734057347"
-EMOJI_PARTY = "5906771962734057347"
+EMOJI_BACK    = "5906771962734057347"
+EMOJI_LINK    = "5271604874419647061"
 
 payment_router = Router()
 bot: Bot = None
@@ -66,31 +52,53 @@ class Storage:
         if user_id not in self.users:
             self.users[user_id] = {
                 'balance': 0.0,
+                'first_name': '',
                 'last_withdrawal': None,
-                'total_deposits': 0.0,
-                'total_withdrawals': 0.0
+                'total_deposits': 0.0,      # ТОЛЬКО реальные депозиты через Cryptobot
+                'total_withdrawals': 0.0,   # ТОЛЬКО реальные выводы через Cryptobot
+                'join_date': datetime.now().strftime('%Y-%m-%d'),
             }
         return self.users[user_id]
 
     def get_balance(self, user_id: int) -> float:
-        return self.get_user(user_id)['balance']
+        return float(self.get_user(user_id).get('balance', 0.0))
+
+    # ── Изменение баланса БЕЗ влияния на статистику депозитов/выводов ─────────
+    # Используется для: выигрышей, проигрышей, возврата ставок, /add
 
     def add_balance(self, user_id: int, amount: float):
+        """Просто пополняет баланс. НЕ считается депозитом."""
         user = self.get_user(user_id)
-        user['balance'] += amount
-        user['total_deposits'] = user.get('total_deposits', 0) + amount
+        user['balance'] = round(user['balance'] + float(amount), 8)
 
     def deduct_balance(self, user_id: int, amount: float) -> bool:
+        """Просто списывает баланс. НЕ считается выводом."""
         user = self.get_user(user_id)
-        if user['balance'] >= amount:
-            user['balance'] -= amount
-            user['total_withdrawals'] = user.get('total_withdrawals', 0) + amount
+        if user['balance'] >= float(amount):
+            user['balance'] = round(user['balance'] - float(amount), 8)
             return True
         return False
 
-    def can_withdraw(self, user_id: int) -> tuple[bool, Optional[int]]:
+    # ── Реальные депозиты и выводы через Cryptobot ────────────────────────────
+
+    def record_deposit(self, user_id: int, amount: float):
+        """Вызывается ТОЛЬКО когда Cryptobot подтвердил оплату."""
         user = self.get_user(user_id)
-        last = user['last_withdrawal']
+        user['balance'] = round(user['balance'] + float(amount), 8)
+        user['total_deposits'] = round(user.get('total_deposits', 0.0) + float(amount), 8)
+
+    def record_withdrawal(self, user_id: int, amount: float) -> bool:
+        """Вызывается ТОЛЬКО при успешном выводе через Cryptobot."""
+        user = self.get_user(user_id)
+        if user['balance'] >= float(amount):
+            user['balance'] = round(user['balance'] - float(amount), 8)
+            user['total_withdrawals'] = round(user.get('total_withdrawals', 0.0) + float(amount), 8)
+            return True
+        return False
+
+    def can_withdraw(self, user_id: int) -> tuple:
+        user = self.get_user(user_id)
+        last = user.get('last_withdrawal')
         if not last:
             return True, None
         seconds = (datetime.now() - last).total_seconds()
@@ -203,9 +211,7 @@ crypto_api = CryptoBotAPI(CRYPTOBOT_API_KEY)
 
 # ========== ФОНОВАЯ ПРОВЕРКА ОПЛАТЫ ==========
 async def check_payment_task(invoice_id: str):
-    """Проверяет оплату каждые 2 секунды, обновляет сообщение при оплате/истечении"""
     try:
-        # Ждём появления chat_id и message_id (до 10 секунд, по 1 сек)
         for wait in range(10):
             await asyncio.sleep(1)
             invoice = storage.get_invoice(invoice_id)
@@ -213,23 +219,19 @@ async def check_payment_task(invoice_id: str):
                 logging.info(f"[{invoice_id}] message_id получен за {wait+1} сек")
                 break
         else:
-            logging.error(f"[{invoice_id}] chat_id/message_id не появились за 10 сек — продолжаем без обновления сообщения")
+            logging.error(f"[{invoice_id}] chat_id/message_id не появились за 10 сек")
 
         for attempt in range(150):
             invoice = storage.get_invoice(invoice_id)
             if not invoice:
                 return
 
-            # Счет истек
             if datetime.now() > invoice['expires_at']:
                 logging.info(f"[{invoice_id}] Счет истек на попытке {attempt}")
                 if invoice.get('chat_id') and invoice.get('message_id'):
                     try:
                         await bot.edit_message_text(
-                            text=(
-                                "❌ <b>Счет истек</b>\n\n"
-                                "Время оплаты вышло. Попробуйте снова."
-                            ),
+                            text="❌ <b>Счет истек</b>\n\nВремя оплаты вышло. Попробуйте снова.",
                             parse_mode=ParseMode.HTML,
                             chat_id=invoice['chat_id'],
                             message_id=invoice['message_id'],
@@ -242,12 +244,12 @@ async def check_payment_task(invoice_id: str):
                 storage.update_invoice_status(invoice_id, 'expired')
                 return
 
-            # Проверяем статус в Cryptobot
             status = await crypto_api.get_invoice_status(invoice['crypto_id'])
-            logging.info(f"[{invoice_id}] Попытка {attempt+1}: статус={status}, chat_id={invoice.get('chat_id')}, msg_id={invoice.get('message_id')}")
+            logging.info(f"[{invoice_id}] Попытка {attempt+1}: статус={status}")
 
             if status == 'paid':
-                storage.add_balance(invoice['user_id'], invoice['amount'])
+                # ✅ Используем record_deposit — единственное место где растёт total_deposits
+                storage.record_deposit(invoice['user_id'], invoice['amount'])
                 storage.update_invoice_status(invoice_id, 'paid')
                 logging.info(f"[{invoice_id}] ОПЛАЧЕН — начислено {invoice['amount']} USDT пользователю {invoice['user_id']}")
 
@@ -272,11 +274,8 @@ async def check_payment_task(invoice_id: str):
                                 )
                             ]])
                         )
-                        logging.info(f"[{invoice_id}] Сообщение обновлено успешно")
                     except Exception as e:
                         logging.error(f"[{invoice_id}] Ошибка edit (paid): {e}")
-                else:
-                    logging.error(f"[{invoice_id}] НЕТ chat_id/message_id — сообщение не обновлено!")
                 return
 
             await asyncio.sleep(2)
@@ -291,7 +290,6 @@ async def check_payment_task(invoice_id: str):
 # ========== ХЕНДЛЕР ВВОДА СУММЫ ==========
 @payment_router.message(F.text.regexp(r'^\d+\.?\d*$'))
 async def handle_amount_input(message: Message):
-    """Единый обработчик числового ввода — смотрит pending_action"""
     user_id = message.from_user.id
     action = storage.get_pending(user_id)
 
@@ -348,10 +346,8 @@ async def _process_deposit(message: Message, user_id: int):
             ])
         )
 
-        # Сохраняем СРАЗУ после отправки — до запуска задачи
         storage.set_message_info(invoice_id, message.chat.id, sent_msg.message_id)
 
-        # Запускаем фоновую проверку уже ПОСЛЕ set_message_info
         if invoice_id not in storage.check_tasks:
             task = asyncio.create_task(check_payment_task(invoice_id))
             storage.check_tasks[invoice_id] = task
@@ -406,7 +402,8 @@ async def _process_withdraw(message: Message, user_id: int):
             )
             return
 
-        storage.deduct_balance(user_id, amount)
+        # ✅ Используем record_withdrawal — единственное место где растёт total_withdrawals
+        storage.record_withdrawal(user_id, amount)
         storage.set_last_withdrawal(user_id)
 
         await message.answer(
