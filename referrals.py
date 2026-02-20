@@ -215,26 +215,26 @@ def kb_referrals_main() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="📊 Статистика",
+                text="Статистика",
                 callback_data="ref_stats",
                 icon_custom_emoji_id=EMOJI_STATS
             ),
             InlineKeyboardButton(
-                text="💰 Вывести",
+                text="Вывести",
                 callback_data="ref_withdraw",
                 icon_custom_emoji_id=EMOJI_WALLET
             ),
         ],
         [
             InlineKeyboardButton(
-                text="🔗 Моя ссылка",
+                text="Моя ссылка",
                 callback_data="ref_link",
                 icon_custom_emoji_id=EMOJI_NUMBER
             ),
         ],
         [
             InlineKeyboardButton(
-                text="На главную",
+                text="Назад",
                 callback_data="back_to_main",
                 icon_custom_emoji_id=EMOJI_BACK
             ),
@@ -245,7 +245,7 @@ def kb_referrals_main() -> InlineKeyboardMarkup:
 def kb_ref_back() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(
-            text="◀️ Назад",
+            text="Назад",
             callback_data="referrals",
             icon_custom_emoji_id=EMOJI_BACK
         )
@@ -282,7 +282,6 @@ def text_referrals_main(user_id: int) -> str:
     return (
         f"{e(EMOJI_PARTNERS,'🤝')} <b>Реферальная программа</b>\n\n"
         f"<blockquote>"
-        f"📈 <b>Ваша комиссия:</b> <code>{REFERRAL_PERCENT}%</code> с каждой ставки реферала\n"
         f"👥 <b>Приглашено:</b> <code>{cnt} {ref_word}</code>\n"
         f"{e(EMOJI_WALLET,'💰')} <b>Реф-баланс:</b> <code>{stats['ref_balance']:.4f}</code> "
         f"{e(EMOJI_COIN,'💎')} USDT\n"
