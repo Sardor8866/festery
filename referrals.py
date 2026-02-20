@@ -315,9 +315,9 @@ def text_ref_stats(user_id: int) -> str:
     return (
         f"{e(EMOJI_STATS,'📊')} <b>Детальная статистика</b>\n\n"
         f"<blockquote>"
-        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Реф-баланс: <code>{stats['ref_balance']:.4f}<tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
-        f"<tg-emoji emoji-id=\"5427168083074628963\">🎰</tg-emoji>Заработано: <code>{stats['total_earned']:.4f} <tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
-        f"{e(EMOJI_WITHDRAWAL,'📤')}Выведено: <code>{stats['total_withdrawn']:.4f} <tg-emoji emoji-id=\"5197434882321567830\">🎰</tg-emoji></code>\n"
+        f"<tg-emoji emoji-id=\"5278467510604160626\">🎰</tg-emoji>Реф-баланс: <code>{stats['ref_balance']:.4f}</code>\n"
+        f"<tg-emoji emoji-id=\"5427168083074628963\">🎰</tg-emoji>Заработано: <code>{stats['total_earned']:.4f}</code>\n"
+        f"{e(EMOJI_WITHDRAWAL,'📤')}Выведено: <code>{stats['total_withdrawn']:.4f}</code>\n"
         f"<tg-emoji emoji-id=\"5332724926216428039\">🎰</tg-emoji>рефералов: <code>{stats['referrals_count']}</code>\n"
         f"</blockquote>\n\n"
         f"<blockquote>"
