@@ -390,11 +390,7 @@ async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     storage.set_pending(callback.from_user.id, 'withdraw')
     await callback.message.edit_text(
         f"<b><tg-emoji emoji-id=\"{EMOJI_WITHDRAWAL}\">💸</tg-emoji> Вывод средств</b>\n\n"
-        f"<blockquote>"
-        f"<tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Доступно: <code>{balance:.2f} USDT</code>\n"
-        f"💸 Минимум: <code>{MIN_WITHDRAWAL:.2f} USDT</code>"
-        f"</blockquote>\n\n"
-        f"<i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму вывода:</i>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">💸</tg-emoji> Введите сумму вывода:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_cancel_menu()
     )
