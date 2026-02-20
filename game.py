@@ -17,6 +17,13 @@ except ImportError:
     async def notify_referrer_commission(user_id: int, bet_amount: float):
         pass
 
+# Модуль лидеров
+try:
+    from leaders import record_game_result
+except ImportError:
+    def record_game_result(user_id, name, bet, win):
+        pass
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -843,6 +850,7 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
+        record_game_result(user_id, nickname, amount, winnings)
 
         await dice_message.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
@@ -850,6 +858,7 @@ async def play_single_dice_game(chat_id: int, user_id: int, nickname: str, amoun
             parse_mode='HTML'
         )
     else:
+        record_game_result(user_id, nickname, amount, 0.0)
         await dice_message.reply(
             f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
             f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
@@ -885,6 +894,7 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
+        record_game_result(user_id, nickname, amount, winnings)
 
         await dice2.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
@@ -892,6 +902,7 @@ async def play_double_dice_game(chat_id: int, user_id: int, nickname: str, amoun
             parse_mode='HTML'
         )
     else:
+        record_game_result(user_id, nickname, amount, 0.0)
         await dice2.reply(
             f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
             f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
@@ -942,6 +953,7 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
     if is_win:
         winnings = amount * bet_config['multiplier']
         betting_game.add_balance(user_id, winnings)
+        record_game_result(user_id, nickname, amount, winnings)
 
         await bot_roll.reply(
             f"<b>{nickname}-Вы выиграли<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji></b>\n\n"
@@ -949,6 +961,7 @@ async def play_bowling_vs_game(chat_id: int, user_id: int, nickname: str, amount
             parse_mode='HTML'
         )
     else:
+        record_game_result(user_id, nickname, amount, 0.0)
         await bot_roll.reply(
             f"<b>{nickname}-Вы проиграли<tg-emoji emoji-id=\"5422858869372104873\">❌</tg-emoji></b>\n\n"
             f"<blockquote><b><i>Это не повод сдаваться! Пробуй снова и снова до победного!</i></b></blockquote>",
