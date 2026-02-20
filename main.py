@@ -213,8 +213,14 @@ def get_profile_text(user_first_name: str, days_in_project: int, user_id: int):
 async def cmd_start(message: Message):
     try:
         args = message.text.split(maxsplit=1)
-        if len(args) > 1 and args[1].startswith("ref_"):
+        has_ref = len(args) > 1 and args[1].startswith("ref_")
+
+        if has_ref:
+            # Пришёл по реф-ссылке — пробуем зарегистрировать реферала
             await process_start_referral(message, args[1])
+        else:
+            # Пришёл сам, без ссылки — помечаем как органического навсегда
+            referral_storage.mark_organic(message.from_user.id)
 
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
@@ -376,7 +382,6 @@ async def deposit_callback(callback: CallbackQuery, state: FSMContext):
 
 
 # ========== ВЫВОД ==========
-# ── Проверки баланса и кулдауна УБРАНЫ с кнопки — ошибка будет после ввода суммы ──
 @router.callback_query(F.data == "withdraw")
 async def withdraw_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
