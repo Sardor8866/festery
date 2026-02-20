@@ -39,7 +39,7 @@ from referrals import (
 )
 
 # Импортируем модуль лидеров
-from leaders import leaders_router, show_leaders
+from leaders import leaders_router, show_leaders, update_user_name
 
 # Настройки
 BOT_TOKEN = "8586332532:AAHX758cf6iOUpPNpY2sqseGBYsKJo9js4U"
@@ -222,6 +222,10 @@ async def cmd_start(message: Message):
 
         storage.get_user(message.from_user.id)
         sync_balances(message.from_user.id)
+
+        # Сохраняем имя для таблицы лидеров
+        update_user_name(storage, message.from_user.id, message.from_user.first_name or "")
+
         await message.answer_sticker(sticker=WELCOME_STICKER_ID)
         await message.answer(
             get_main_menu_text(),
@@ -286,6 +290,9 @@ async def profile_callback(callback: CallbackQuery, state: FSMContext):
     join_date_str = user_data.get('join_date', datetime.now().strftime('%Y-%m-%d'))
     join_date     = datetime.strptime(join_date_str, '%Y-%m-%d')
     days_in_project = (datetime.now() - join_date).days
+
+    # Обновляем имя при каждом открытии профиля
+    update_user_name(storage, callback.from_user.id, callback.from_user.first_name or "")
 
     await callback.message.edit_text(
         get_profile_text(callback.from_user.first_name, days_in_project, callback.from_user.id),
