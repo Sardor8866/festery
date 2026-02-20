@@ -381,7 +381,7 @@ async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(ReferralWithdraw.entering_amount)
     await callback.message.edit_text(
         f"{e(EMOJI_WITHDRAWAL,'📤')} <b>Вывод реферального баланса</b>\n\n"
-        f"<blockauote><i><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму для вывода:</i></blockquote>",
+        f"<blockquote><i><tg-emoji emoji-id=\"5197269100878907942\">🎰</tg-emoji>Введите сумму для вывода:</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=kb_ref_cancel()
     )
