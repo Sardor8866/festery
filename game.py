@@ -3,8 +3,6 @@ from aiogram import Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-import json
-import os
 import logging
 import re
 from datetime import datetime, timedelta
@@ -233,49 +231,35 @@ class BetStates(StatesGroup):
 class BettingGame:
     def __init__(self, bot: Bot):
         self.bot = bot
-        self.user_balances = {}
         self.pending_bets = {}
         self.active_games = {}  # Защита от одновременных игр
         self.referral_system = None
-        self.load_balances()
+        # Баланс хранится в payments.storage — не дублируем
 
-    def load_balances(self):
-        if os.path.exists('balances.json'):
-            try:
-                with open('balances.json', 'r') as f:
-                    data = json.load(f)
-                    self.user_balances = {int(k): float(v) for k, v in data.items()}
-            except Exception as e:
-                logging.error(f"Error loading balances: {e}")
-                self.user_balances = {}
-        else:
-            self.user_balances = {}
+    @property
+    def _storage(self):
+        from payments import storage as pay_storage
+        return pay_storage
+
+    # Оставляем для совместимости с main.py (sync_balances)
+    @property
+    def user_balances(self):
+        return {uid: d.get('balance', 0.0) for uid, d in self._storage.users.items()}
 
     def save_balances(self):
-        try:
-            data_to_save = {str(k): v for k, v in self.user_balances.items()}
-            with open('balances.json', 'w') as f:
-                json.dump(data_to_save, f, indent=4)
-        except Exception as e:
-            logging.error(f"Error saving balances: {e}")
+        pass  # баланс хранится в payments.storage — файл не нужен
 
     def get_balance(self, user_id: int) -> float:
-        return float(self.user_balances.get(user_id, 0.0))
+        return self._storage.get_balance(user_id)
 
     def add_balance(self, user_id: int, amount: float) -> float:
-        if user_id not in self.user_balances:
-            self.user_balances[user_id] = 0.0
-        self.user_balances[user_id] += float(amount)
-        self.save_balances()
-        return self.user_balances[user_id]
+        """Зачисление выигрыша — НЕ депозит, total_deposits не меняется."""
+        self._storage.add_balance(user_id, amount)
+        return self._storage.get_balance(user_id)
 
     def subtract_balance(self, user_id: int, amount: float) -> bool:
-        amount_float = float(amount)
-        if self.get_balance(user_id) >= amount_float:
-            self.user_balances[user_id] = max(0, self.user_balances.get(user_id, 0) - amount_float)
-            self.save_balances()
-            return True
-        return False
+        """Списание ставки — НЕ вывод, total_withdrawals не меняется."""
+        return self._storage.deduct_balance(user_id, amount)
 
     def get_bet_config(self, bet_type: str):
         """Получить конфигурацию ставки по типу"""
