@@ -72,23 +72,77 @@ class ReferralStorage:
                 "total_earned":    0.0,
                 "total_withdrawn": 0.0,
                 "join_date":       datetime.now().strftime("%Y-%m-%d"),
+                # joined_organically=True означает что юзер пришёл сам,
+                # без реф-ссылки — он навсегда заблокирован от реф-системы
+                "joined_organically": False,
             }
             self._save()
         return self._data[key]
 
+    def mark_organic(self, user_id: int):
+        """
+        Вызывается из main.py когда /start пришёл БЕЗ реф-параметра.
+        Если запись уже есть — ничего не меняем (юзер уже был зарегистрирован).
+        Если записи нет — создаём с флагом joined_organically=True.
+        """
+        key = str(user_id)
+        if key not in self._data:
+            # Первый визит, без реф-ссылки — помечаем навсегда
+            self._data[key] = {
+                "referrer_id":        None,
+                "referrals":          [],
+                "ref_balance":        0.0,
+                "total_earned":       0.0,
+                "total_withdrawn":    0.0,
+                "join_date":          datetime.now().strftime("%Y-%m-%d"),
+                "joined_organically": True,
+            }
+            self._save()
+            logging.info(f"[Referral] {user_id} пришёл без реф-ссылки → заблокирован от реф-системы")
+
     def register_referral(self, new_user_id: int, referrer_id: int) -> bool:
+        # 1. Нельзя быть рефералом самого себя
         if new_user_id == referrer_id:
+            logging.info(f"[Referral] {new_user_id} попытался стать рефералом самого себя")
             return False
-        record = self._get(new_user_id)
-        if record["referrer_id"] is not None:
+
+        key = str(new_user_id)
+
+        # 2. Если юзер уже есть в базе (пришёл раньше без реф-ссылки или уже чей-то реферал)
+        if key in self._data:
+            record = self._data[key]
+
+            # Уже чей-то реферал
+            if record.get("referrer_id") is not None:
+                logging.info(f"[Referral] {new_user_id} уже является рефералом {record['referrer_id']}")
+                return False
+
+            # Пришёл органически (без реф-ссылки) — навсегда заблокирован
+            if record.get("joined_organically", False):
+                logging.info(f"[Referral] {new_user_id} пришёл органически ранее — реф-регистрация запрещена")
+                return False
+
+        # 3. Проверяем реферера
+        referrer_key = str(referrer_id)
+        if referrer_key not in self._data:
+            # Реферера вообще нет в базе — невалидная ссылка
+            logging.info(f"[Referral] Реферер {referrer_id} не найден в базе")
             return False
-        referrer_record = self._get(referrer_id)
+
+        referrer_record = self._data[referrer_key]
+
+        # 4. Защита от дублей в списке рефералов реферера
         if new_user_id in referrer_record["referrals"]:
+            logging.info(f"[Referral] {new_user_id} уже в списке рефералов {referrer_id}")
             return False
-        record["referrer_id"] = referrer_id
+
+        # 5. Регистрируем
+        record = self._get(new_user_id)
+        record["referrer_id"]       = referrer_id
+        record["joined_organically"] = False
         referrer_record["referrals"].append(new_user_id)
         self._save()
-        logging.info(f"[Referral] {new_user_id} → реферал {referrer_id}")
+        logging.info(f"[Referral] {new_user_id} → реферал {referrer_id} ✅")
         return True
 
     def accrue_commission(self, referral_user_id: int, bet_amount: float) -> float:
@@ -330,7 +384,6 @@ async def ref_link(callback: CallbackQuery, state: FSMContext):
 
 @referral_router.callback_query(F.data == "ref_withdraw")
 async def ref_withdraw_start(callback: CallbackQuery, state: FSMContext):
-    # ── Проверки баланса УБРАНЫ — ошибка покажется после ввода суммы ──
     ref_balance = referral_storage.get_ref_balance(callback.from_user.id)
 
     await state.set_state(ReferralWithdraw.entering_amount)
