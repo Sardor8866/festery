@@ -5,7 +5,7 @@ from aiogram.enums import ParseMode
 
 leaders_router = Router()
 
-# ── ID кастомных эмодзи (из main.py) ──────────────────────────────────────────
+# ── ID кастомных эмодзи ───────────────────────────────────────────────────────
 EMOJI_LEADERS  = "5440539497383087970"
 EMOJI_BACK     = "5906771962734057347"
 EMOJI_TURNOVER = "5197288647275071607"
@@ -13,6 +13,24 @@ EMOJI_WIN      = "5278467510604160626"
 EMOJI_DEPOSIT  = "5443127283898405358"
 EMOJI_WITHDRAW = "5445355530111437729"
 EMOJI_COIN     = "5197434882321567830"
+
+# ── Кастомные эмодзи для каждого места (замени ID на свои) ───────────────────
+EMOJI_TOP1  = "5440539497383087970"   # 🏆  место 1
+EMOJI_TOP2  = "5440539497383087970"   # место 2
+EMOJI_TOP3  = "5440539497383087970"   # место 3
+EMOJI_TOP4  = "5440539497383087970"   # место 4
+EMOJI_TOP5  = "5440539497383087970"   # место 5
+EMOJI_TOP6  = "5440539497383087970"   # место 6
+EMOJI_TOP7  = "5440539497383087970"   # место 7
+EMOJI_TOP8  = "5440539497383087970"   # место 8
+EMOJI_TOP9  = "5440539497383087970"   # место 9
+EMOJI_TOP10 = "5440539497383087970"   # место 10
+
+# Список по порядку (индекс 0 = 1-е место)
+EMOJI_TOP_LIST = [
+    EMOJI_TOP1, EMOJI_TOP2, EMOJI_TOP3, EMOJI_TOP4, EMOJI_TOP5,
+    EMOJI_TOP6, EMOJI_TOP7, EMOJI_TOP8, EMOJI_TOP9, EMOJI_TOP10,
+]
 
 # ── Типы и периоды ────────────────────────────────────────────────────────────
 LEADER_TYPES   = ["turnover", "wins", "deposits", "withdrawals"]
@@ -31,8 +49,6 @@ PERIOD_LABELS = {
     "week":      "Неделя",
     "month":     "Месяц",
 }
-
-MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 # ── Внутреннее хранилище игровой статистики ───────────────────────────────────
 # _stats[user_id][date_str] = {"turnover": float, "wins": float, "name": str}
@@ -62,11 +78,8 @@ def _dates_for_period(period: str) -> list:
 def record_game_result(user_id: int, name: str, bet: float, win: float):
     """
     Вызывается из mines.py / tower.py / game.py после каждой завершённой ставки.
-
-    user_id — ID игрока
-    name    — отображаемое имя
-    bet     — размер ставки (добавляется в оборот)
-    win     — сумма выплаты (0 при проигрыше; включает ставку при выигрыше)
+    bet  — размер ставки (оборот)
+    win  — сумма выплаты (0 при проигрыше; сумма при выигрыше)
     """
     date = _today_str()
     if user_id not in _stats:
@@ -76,7 +89,21 @@ def record_game_result(user_id: int, name: str, bet: float, win: float):
 
     _stats[user_id][date]["turnover"] += bet
     _stats[user_id][date]["wins"]     += win
-    _stats[user_id][date]["name"]      = name
+    _stats[user_id][date]["name"]      = name   # обновляем имя при каждой игре
+
+
+# ── Сохранение имени пользователя в storage (вызывать при любом обращении) ───
+def update_user_name(storage, user_id: int, first_name: str):
+    """
+    Записывает имя в payments.storage.users чтобы депозиты/выводы
+    отображали ник, а не ID.
+    """
+    try:
+        user = storage.get_user(user_id)
+        if first_name:
+            user['first_name'] = first_name
+    except Exception:
+        pass
 
 
 # ── Топ-10 ───────────────────────────────────────────────────────────────────
@@ -100,16 +127,34 @@ def get_top10(storage, leader_type: str, period: str) -> list:
             users_data = storage.users
         except AttributeError:
             users_data = {}
+
         field = "total_deposits" if leader_type == "deposits" else "total_withdrawals"
         for uid, data in users_data.items():
             value = float(data.get(field, 0) or 0)
             if value <= 0:
                 continue
-            name = data.get("first_name") or data.get("username") or f"User {uid}"
+
+            # Приоритет: first_name → username → имя из _stats → "User {id}"
+            name = (
+                data.get("first_name")
+                or data.get("username")
+                or _get_name_from_stats(uid)
+                or f"User {uid}"
+            )
             results[uid] = {"user_id": uid, "name": str(name), "value": value}
 
     sorted_list = sorted(results.values(), key=lambda x: x["value"], reverse=True)
     return sorted_list[:10]
+
+
+def _get_name_from_stats(user_id: int) -> str:
+    """Ищет последнее известное имя игрока в _stats."""
+    day_data = _stats.get(user_id, {})
+    for date in sorted(day_data.keys(), reverse=True):
+        name = day_data[date].get("name", "")
+        if name:
+            return name
+    return ""
 
 
 # ── Клавиатура ────────────────────────────────────────────────────────────────
@@ -160,9 +205,10 @@ def build_leaders_text(storage, leader_type: str, period: str) -> str:
     else:
         lines = []
         for i, entry in enumerate(top, start=1):
-            medal = MEDALS.get(i, f"<b>{i}.</b>")
+            emoji_id = EMOJI_TOP_LIST[i - 1]   # кастомное эмодзи для места
             lines.append(
-                f'{medal} <b>{entry["name"]}</b> — '
+                f'<tg-emoji emoji-id="{emoji_id}">🏅</tg-emoji> '
+                f'<b>{entry["name"]}</b> — '
                 f'<code>{entry["value"]:,.2f}</code>'
                 f'<tg-emoji emoji-id="{EMOJI_COIN}">💰</tg-emoji>'
             )
