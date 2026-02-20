@@ -484,8 +484,8 @@ async def tower_cell_handler(callback: CallbackQuery, state: FSMContext):
 
             balance = pay_storage.get_balance(user_id)
             await callback.message.edit_text(
-                f"<blockquote><b><tg-emoji emoji-id=\"5210952531676504517\">🎰</tg-emoji>"
-                f"Вы прошли все этажи! 🏆</b></blockquote>\n\n"
+                f"<blockquote><b><tg-emoji emoji-id=\"5461151367559141950\">🎰</tg-emoji>"
+                f"Вы прошли все этажи!</b></blockquote>\n\n"
                 f"<blockquote>"
                 f"<tg-emoji emoji-id=\"5429651785352501917\">🎰</tg-emoji>Множитель: <b>x{mult}</b>\n"
                 f"<tg-emoji emoji-id=\"5305699699204837855\">🎰</tg-emoji>Выигрыш: "
