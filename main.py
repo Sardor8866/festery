@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+from datetime import datetime
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
@@ -36,6 +37,11 @@ from referrals import (
     referral_router, referral_storage,
     setup_referrals, process_start_referral,
     ReferralWithdraw, ref_withdraw_amount
+)
+
+# Импортируем модуль лидеров
+from leaders import (
+    leaders_router, setup_leaders, update_game_stats, update_payment_stats
 )
 
 # Настройки
@@ -84,8 +90,9 @@ ADMIN_IDS = [8118184388]
 # Роутер
 router = Router()
 
-# Экземпляр игры
+# Экземпляры игр и хранилищ
 betting_game = None
+leaders_storage = None
 
 
 # ========== СИНХРОНИЗАЦИЯ БАЛАНСОВ ==========
@@ -175,7 +182,7 @@ def get_games_menu_text(user_id: int):
     balance = sync_balances(user_id)
     return (
         f"<blockquote><tg-emoji emoji-id=\"{EMOJI_GAMES}\">🎮</tg-emoji> <b>Игры</b></blockquote>\n\n"
-        f"<blockquote><tg-emoji emoji-id=\"5278467510604160626\">🎮</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">🎮</tg-emoji></blockquote>\n\n"
+        f"<blockquote><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>:<code>{balance:.2f}</code><tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></blockquote>\n\n"
         f"<blockquote><b>Выберите игру:</b></blockquote>\n\n"
         f"<tg-emoji emoji-id=\"5907025791006283345\">💬</tg-emoji> <b><a href=\"https://t.me/your_support\">Тех. поддержка</a> | <a href=\"https://t.me/your_chat\">Наш чат</a> | <a href=\"https://t.me/your_news\">Новости</a></b>\n"
     )
@@ -441,7 +448,7 @@ async def handle_text_message(message: Message, state: FSMContext):
 
     # Числовой ввод
     try:
-        float(message.text)
+        amount = float(message.text)
         if current_state:
             from game import process_bet_amount
             await process_bet_amount(message, state, betting_game)
@@ -451,20 +458,19 @@ async def handle_text_message(message: Message, state: FSMContext):
         pass
 
 
-# ========== ЛИДЕРЫ ==========
+# ========== ОБРАБОТЧИКИ ЛИДЕРОВ ==========
 @router.callback_query(F.data == "leaders")
-async def leaders_callback(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.edit_text(
-        f'<tg-emoji emoji-id="{EMOJI_LEADERS}">🏆</tg-emoji> <b>Таблица лидеров</b>\n\n'
-        f'<tg-emoji emoji-id="{EMOJI_DEVELOPMENT}">🔧</tg-emoji> <b>Раздел в разработке</b>\n\n'
-        f'Скоро здесь появятся лучшие игроки.',
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")
-        ]])
-    )
-    await callback.answer()
+async def leaders_menu_callback(callback: CallbackQuery, state: FSMContext):
+    """Показать меню лидеров"""
+    from leaders import show_leaders_menu
+    await show_leaders_menu(callback, state)
+
+
+@router.callback_query(F.data.startswith("leaders_"))
+async def leaders_handler(callback: CallbackQuery):
+    """Обработка всех callback'ов лидеров"""
+    from leaders import leaders_category_handler
+    await leaders_category_handler(callback)
 
 
 # ========== О ПРОЕКТЕ ==========
@@ -501,31 +507,41 @@ async def back_to_main_callback(callback: CallbackQuery, state: FSMContext):
 
 # ========== ЗАПУСК ==========
 async def main():
-    global betting_game
+    global betting_game, leaders_storage
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp  = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher(storage=MemoryStorage())
 
     bot_info = await bot.get_me()
     os.environ["BOT_USERNAME"] = bot_info.username
     logging.info(f"Бот запущен как @{bot_info.username}")
 
+    # Инициализация игр
     betting_game = BettingGame(bot)
+    
+    # Инициализация модуля лидеров
+    leaders_storage = setup_leaders(storage)
+    logging.info("Модуль лидеров инициализирован")
 
+    # Подключаем все роутеры
     dp.include_router(router)
     dp.include_router(mines_router)
     dp.include_router(tower_router)
     dp.include_router(referral_router)
     dp.include_router(payment_router)
+    dp.include_router(leaders_router)
 
+    # Настройка модулей
     setup_payments(bot)
     setup_referrals(bot)
 
+    # Настройка вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
 
     logging.info(f"Бот запущен на вебхуках: {WEBHOOK_URL}")
 
+    # Создание веб-приложения
     app = web.Application()
 
     async def webhook_handler(request):
