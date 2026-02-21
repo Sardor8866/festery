@@ -54,7 +54,7 @@ if RENDER_URL:
 else:
     WEBHOOK_URL = f"https://festery.onrender.com{WEBHOOK_PATH}"
 
-# ID кастомных эмодзи
+# ID кастомных эмодзи (только оригинальные из проекта)
 EMOJI_WELCOME    = "5199885118214255386"
 EMOJI_PROFILE    = "5906581476639513176"
 EMOJI_PARTNERS   = "5906986955911993888"
@@ -68,11 +68,6 @@ EMOJI_WALLET     = "5443127283898405358"
 EMOJI_STATS      = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_MINES      = "5307996024738395492"
-EMOJI_PROMO      = "5307996024738395492"   # 🎟
-EMOJI_GIFT       = "5307996024738395492"   # 🎁
-EMOJI_FIRE       = "5307996024738395492"   # 🔥
-EMOJI_CHECK      = "5307996024738395492"   # ✅
-EMOJI_CROSS      = "5307996024738395492"   # ❌
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
@@ -175,7 +170,7 @@ def get_main_menu():
             InlineKeyboardButton(text="Лидеры", callback_data="leaders", icon_custom_emoji_id=EMOJI_LEADERS)
         ],
         [
-            InlineKeyboardButton(text="Промокоды", callback_data="promo_menu", icon_custom_emoji_id=EMOJI_PROMO),
+            InlineKeyboardButton(text="Промокоды", callback_data="promo_menu", icon_custom_emoji_id=EMOJI_MINES),
             InlineKeyboardButton(text="О проекте", callback_data="about",      icon_custom_emoji_id=EMOJI_ABOUT)
         ]
     ])
@@ -246,7 +241,7 @@ def get_promo_menu():
             InlineKeyboardButton(
                 text="Ввести промокод",
                 callback_data="promo_enter",
-                icon_custom_emoji_id=EMOJI_GIFT
+                icon_custom_emoji_id=EMOJI_WALLET
             )
         ],
         [
@@ -415,16 +410,13 @@ async def cmd_add_balance(message: Message):
 @router.message(F.text.startswith("/addpromo"))
 async def cmd_add_promo(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Нет доступа.</b>",
-            parse_mode=ParseMode.HTML
-        )
+        await message.answer("❌ Нет доступа.")
         return
 
     parts = message.text.split()
     if len(parts) != 4:
         await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Создание промокода</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"{EMOJI_STATS}\">📊</tg-emoji> Создание промокода</b>\n\n"
             f"<blockquote><b>Использование:</b>\n"
             f"<code>/addpromo [код] [сумма] [активации]</code>\n\n"
             f"<b>Пример:</b>\n"
@@ -439,15 +431,15 @@ async def cmd_add_promo(message: Message):
         activations = int(parts[3])
     except ValueError:
         await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Неверный формат.</b>\n"
-            f"<blockquote>Сумма — число, активации — целое число.</blockquote>",
+            "❌ <b>Неверный формат.</b>\n"
+            "<blockquote>Сумма — число, активации — целое число.</blockquote>",
             parse_mode=ParseMode.HTML
         )
         return
 
     if amount <= 0 or activations <= 0:
         await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Сумма и количество активаций должны быть больше 0.</b>",
+            "❌ <b>Сумма и количество активаций должны быть больше 0.</b>",
             parse_mode=ParseMode.HTML
         )
         return
@@ -455,17 +447,17 @@ async def cmd_add_promo(message: Message):
     ok = promo_create(code, amount, activations)
     if not ok:
         await message.answer(
-            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Промокод <code>{code}</code> уже существует.</b>",
+            f"❌ <b>Промокод <code>{code}</code> уже существует.</b>",
             parse_mode=ParseMode.HTML
         )
         return
 
     await message.answer(
-        f"<tg-emoji emoji-id=\"{EMOJI_CHECK}\">✅</tg-emoji> <b>Промокод создан!</b>\n\n"
+        f"✅ <b>Промокод создан!</b>\n\n"
         f"<blockquote>"
-        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> Код: <code>{code}</code>\n"
-        f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Сумма: <b><code>{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
-        f"<tg-emoji emoji-id=\"{EMOJI_FIRE}\">🔥</tg-emoji> Активаций: <b><code>{activations}</code></b>"
+        f"<tg-emoji emoji-id=\"{EMOJI_STATS}\">📊</tg-emoji> Код: <code>{code}</code>\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Сумма: <b><code>{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_WELCOME}\">🔥</tg-emoji> Активаций: <b><code>{activations}</code></b>"
         f"</blockquote>",
         parse_mode=ParseMode.HTML
     )
@@ -477,10 +469,10 @@ async def cmd_add_promo(message: Message):
 async def promo_menu_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(
-        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Промокоды</b>\n\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_MINES}\">💣</tg-emoji> <b>Промокоды</b>\n\n"
         f"<blockquote>"
-        f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Активируй промокод и получи бонус на баланс.\n\n"
-        f"<tg-emoji emoji-id=\"{EMOJI_FIRE}\">🔥</tg-emoji> Промокоды публикуются в нашем канале и чате."
+        f"<tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Активируй промокод и получи бонус на баланс.\n\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_WELCOME}\">🔥</tg-emoji> Промокоды публикуются в нашем канале и чате."
         f"</blockquote>\n\n"
         f"<tg-emoji emoji-id=\"5907025791006283345\">💬</tg-emoji> <b><a href=\"https://t.me/your_support\">Тех. поддержка</a> | <a href=\"https://t.me/your_chat\">Наш чат</a> | <a href=\"https://t.me/your_news\">Новости</a></b>",
         parse_mode=ParseMode.HTML,
@@ -494,7 +486,7 @@ async def promo_menu_callback(callback: CallbackQuery, state: FSMContext):
 async def promo_enter_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(PromoState.entering_code)
     await callback.message.edit_text(
-        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Введите промокод</b>\n\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_STATS}\">📊</tg-emoji> <b>Введите промокод</b>\n\n"
         f"<blockquote><i>Напишите код в чат — регистр не важен.</i></blockquote>",
         parse_mode=ParseMode.HTML,
         reply_markup=get_promo_cancel_menu()
@@ -658,14 +650,18 @@ async def handle_text_message(message: Message, state: FSMContext):
             new_balance = storage.get_balance(message.from_user.id)
             await state.clear()
             await message.answer(
-                f"<tg-emoji emoji-id=\"{EMOJI_CHECK}\">✅</tg-emoji> <b>Промокод активирован!</b>\n\n"
+                f"✅ <b>Промокод активирован!</b>\n\n"
                 f"<blockquote>"
-                f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Начислено: <b><code>+{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
+                f"<tg-emoji emoji-id=\"{EMOJI_WALLET}\">💰</tg-emoji> Начислено: <b><code>+{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
                 f"<tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji> Баланс: <b><code>{new_balance:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>"
                 f"</blockquote>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="На главную", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
+                    InlineKeyboardButton(
+                        text="На главную",
+                        callback_data="back_to_main",
+                        icon_custom_emoji_id=EMOJI_BACK
+                    )
                 ]])
             )
         else:
@@ -676,7 +672,7 @@ async def handle_text_message(message: Message, state: FSMContext):
             }
             err_msg = error_texts.get(reason, "Неизвестная ошибка.")
             await message.answer(
-                f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Ошибка активации</b>\n\n"
+                f"❌ <b>Ошибка активации</b>\n\n"
                 f"<blockquote>{err_msg}</blockquote>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=get_promo_cancel_menu()
