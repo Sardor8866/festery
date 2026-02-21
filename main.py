@@ -458,21 +458,20 @@ async def tower_command_handler(message: Message, state: FSMContext):
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
-
-    # ── КОМАНДА БАЛАНСА — отвечаем реплаем на сообщение пользователя ───
+    
+    # — КОМАНДА БАЛАНСА — отвечаем реплаем на сообщение пользователя —
     if is_balance_command(message.text):
-    balance = sync_balances(message.from_user.id)
-    await message.reply(
-        f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji> "
-        f"<code>{balance:,.2f}</code> "
-        f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></b></blockquote>\n\n"
-        f"<blockquote><i>Выберите действие ниже <tg-emoji emoji-id=\"5201691993775818138\">💰</tg-emoji></i></blockquote>",
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_balance_menu()
-    )
-    return
-    # ────────────────────────────────────────────────────────────────────
-
+        balance = sync_balances(message.from_user.id)
+        await message.reply(
+            f"<blockquote><b><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji> "
+            f"<code>{balance:,.2f}</code> "
+            f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></b></blockquote>\n\n"
+            f"<blockquote><i>Выберите действие ниже <tg-emoji emoji-id=\"5201691993775818138\">💰</tg-emoji></i></blockquote>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_balance_menu()
+        )
+        return
+    
     current_state = await state.get_state()
 
     # ── Вывод реферального баланса ──────────────────────────────────────
