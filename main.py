@@ -466,7 +466,7 @@ async def handle_text_message(message: Message, state: FSMContext):
             f"<b><tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji>: "
             f"<code>{balance:,.2f}</code> "
             f"<tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji></b></blockquote>"
-            f"<blockquote><i>Выберите действие ниже<tg-emoji emoji-id=\"5201691993775818138\">💰</tg-emoji></b></blockquote></i></blockquote>",
+            f"<blockquote><i>Выберите действие ниже<tg-emoji emoji-id=\"5201691993775818138\">💰</tg-emoji></i></blockquote>",
             parse_mode=ParseMode.HTML,
             reply_markup=get_balance_menu()
         )
