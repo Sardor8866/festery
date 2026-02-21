@@ -526,7 +526,7 @@ async def show_dice_menu(callback: CallbackQuery):
             InlineKeyboardButton(text="2-больше (x3.6)", callback_data="bet_dice_куб_2больше", icon_custom_emoji_id=EMOJI_2MORE)
         ],
         [
-            InlineKeyboardButton(text="Точное число (x4)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_NUMBER)
+            InlineKeyboardButton(text="Точное число (x4.7)", callback_data="bet_dice_exact", icon_custom_emoji_id=EMOJI_NUMBER)
         ],
         [
             InlineKeyboardButton(text="Назад", callback_data="games", icon_custom_emoji_id=EMOJI_BACK)
