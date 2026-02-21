@@ -2,10 +2,12 @@ import asyncio
 import logging
 import os
 import re
+import json
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, Update, CallbackQuery
 from aiogram.filters.command import CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -66,6 +68,11 @@ EMOJI_WALLET     = "5443127283898405358"
 EMOJI_STATS      = "5197288647275071607"
 EMOJI_WITHDRAWAL = "5445355530111437729"
 EMOJI_MINES      = "5307996024738395492"
+EMOJI_PROMO      = "5431815452437257407"   # 🎟
+EMOJI_GIFT       = "5449683594425410151"   # 🎁
+EMOJI_FIRE       = "5199885118214255386"   # 🔥
+EMOJI_CHECK      = "5368324170671202286"   # ✅
+EMOJI_CROSS      = "5210952531676504517"   # ❌
 
 # Кастомные callback_data для игр
 GAME_CALLBACKS = {
@@ -84,6 +91,9 @@ WELCOME_STICKER_ID = "CAACAgIAAxkBAAIGUWmRflo7gmuMF5MNUcs4LGpyA93yAAKaDAAC753ZS6
 # ID администраторов
 ADMIN_IDS = [8118184388]
 
+# Путь к файлу промокодов
+PROMO_FILE = "promos.json"
+
 # Роутер
 router = Router()
 
@@ -91,9 +101,56 @@ router = Router()
 betting_game = None
 
 
+# ========== FSM ==========
+class PromoState(StatesGroup):
+    entering_code = State()
+
+
+# ========== ПРОМОКОДЫ: ХРАНИЛИЩЕ ==========
+def load_promos() -> dict:
+    if not os.path.exists(PROMO_FILE):
+        return {}
+    try:
+        with open(PROMO_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_promos(data: dict):
+    with open(PROMO_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def promo_create(code: str, amount: float, activations: int) -> bool:
+    data = load_promos()
+    code = code.upper().strip()
+    if code in data:
+        return False
+    data[code] = {"amount": amount, "activations": activations, "used_by": []}
+    save_promos(data)
+    return True
+
+
+def promo_use(code: str, user_id: int):
+    """Возвращает (ok: bool, amount: float, reason: str)"""
+    data = load_promos()
+    code = code.upper().strip()
+    if code not in data:
+        return False, 0, "not_found"
+    promo = data[code]
+    if user_id in promo["used_by"]:
+        return False, 0, "already_used"
+    if promo["activations"] <= 0:
+        return False, 0, "expired"
+    promo["used_by"].append(user_id)
+    promo["activations"] -= 1
+    save_promos(data)
+    return True, promo["amount"], "ok"
+
+
 # ========== ПРОВЕРКА КОМАНДЫ БАЛАНСА ==========
 def is_balance_command(text: str) -> bool:
-    """Проверяет, является ли текст командой баланса (точное совпадение)."""
     if not text:
         return False
     t = text.lstrip('/')
@@ -110,15 +167,16 @@ def sync_balances(user_id: int):
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Профиль",  callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE),
+            InlineKeyboardButton(text="Профиль",  callback_data="profile",  icon_custom_emoji_id=EMOJI_PROFILE),
             InlineKeyboardButton(text="Партнёры", callback_data="referrals", icon_custom_emoji_id=EMOJI_PARTNERS)
         ],
         [
-            InlineKeyboardButton(text="Игры",    callback_data="games",   icon_custom_emoji_id=EMOJI_GAMES),
-            InlineKeyboardButton(text="Лидеры",  callback_data="leaders", icon_custom_emoji_id=EMOJI_LEADERS)
+            InlineKeyboardButton(text="Игры",   callback_data="games",   icon_custom_emoji_id=EMOJI_GAMES),
+            InlineKeyboardButton(text="Лидеры", callback_data="leaders", icon_custom_emoji_id=EMOJI_LEADERS)
         ],
         [
-            InlineKeyboardButton(text="О проекте", callback_data="about", icon_custom_emoji_id=EMOJI_ABOUT)
+            InlineKeyboardButton(text="Промокоды", callback_data="promo_menu", icon_custom_emoji_id=EMOJI_PROMO),
+            InlineKeyboardButton(text="О проекте", callback_data="about",      icon_custom_emoji_id=EMOJI_ABOUT)
         ]
     ])
 
@@ -165,7 +223,6 @@ def get_cancel_menu():
 
 
 def get_balance_menu():
-    """Кнопки-ссылки: при нажатии переводят в бота и сразу открывают ввод суммы."""
     bot_username = os.getenv("BOT_USERNAME", "your_bot")
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -181,6 +238,35 @@ def get_balance_menu():
             )
         ]
     ])
+
+
+def get_promo_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Ввести промокод",
+                callback_data="promo_enter",
+                icon_custom_emoji_id=EMOJI_GIFT
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="На главную",
+                callback_data="back_to_main",
+                icon_custom_emoji_id=EMOJI_BACK
+            )
+        ]
+    ])
+
+
+def get_promo_cancel_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="Отмена",
+            callback_data="promo_menu",
+            icon_custom_emoji_id=EMOJI_BACK
+        )
+    ]])
 
 
 # ========== ТЕКСТЫ ==========
@@ -238,7 +324,6 @@ async def cmd_start(message: Message):
         args = message.text.split(maxsplit=1)
         param = args[1] if len(args) > 1 else ""
 
-        # ── Пополнение через ссылку ─────────────────────────────────────
         if param == "deposit":
             storage.get_user(message.from_user.id)
             storage.set_pending(message.from_user.id, 'deposit')
@@ -250,7 +335,6 @@ async def cmd_start(message: Message):
             )
             return
 
-        # ── Вывод через ссылку ──────────────────────────────────────────
         elif param == "withdraw":
             storage.get_user(message.from_user.id)
             storage.set_pending(message.from_user.id, 'withdraw')
@@ -262,11 +346,9 @@ async def cmd_start(message: Message):
             )
             return
 
-        # ── Реферальная ссылка ──────────────────────────────────────────
         elif param.startswith("ref_"):
             await process_start_referral(message, param)
 
-        # ── Обычный старт ───────────────────────────────────────────────
         else:
             referral_storage.mark_organic(message.from_user.id)
 
@@ -286,7 +368,7 @@ async def cmd_start(message: Message):
 
 
 # ========== АДМИН: /add ==========
-@router.message(F.text.startswith("/add"))
+@router.message(F.text.startswith("/add") & ~F.text.startswith("/addpromo"))
 async def cmd_add_balance(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ Нет доступа.")
@@ -327,6 +409,97 @@ async def cmd_add_balance(message: Message):
         parse_mode=ParseMode.HTML
     )
     logging.info(f"Админ {message.from_user.id} выдал {amount} пользователю {target_id}. Новый баланс: {new_balance}")
+
+
+# ========== АДМИН: /addpromo ==========
+@router.message(F.text.startswith("/addpromo"))
+async def cmd_add_promo(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Нет доступа.</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    parts = message.text.split()
+    if len(parts) != 4:
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Создание промокода</b>\n\n"
+            f"<blockquote><b>Использование:</b>\n"
+            f"<code>/addpromo [код] [сумма] [активации]</code>\n\n"
+            f"<b>Пример:</b>\n"
+            f"<code>/addpromo SUMMER25 50 100</code></blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    code = parts[1].upper().strip()
+    try:
+        amount      = float(parts[2])
+        activations = int(parts[3])
+    except ValueError:
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Неверный формат.</b>\n"
+            f"<blockquote>Сумма — число, активации — целое число.</blockquote>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    if amount <= 0 or activations <= 0:
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Сумма и количество активаций должны быть больше 0.</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    ok = promo_create(code, amount, activations)
+    if not ok:
+        await message.answer(
+            f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Промокод <code>{code}</code> уже существует.</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    await message.answer(
+        f"<tg-emoji emoji-id=\"{EMOJI_CHECK}\">✅</tg-emoji> <b>Промокод создан!</b>\n\n"
+        f"<blockquote>"
+        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> Код: <code>{code}</code>\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Сумма: <b><code>{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_FIRE}\">🔥</tg-emoji> Активаций: <b><code>{activations}</code></b>"
+        f"</blockquote>",
+        parse_mode=ParseMode.HTML
+    )
+    logging.info(f"Админ {message.from_user.id} создал промокод {code} на {amount} ({activations} активаций)")
+
+
+# ========== ПРОМОКОДЫ: МЕНЮ ==========
+@router.callback_query(F.data == "promo_menu")
+async def promo_menu_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text(
+        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Промокоды</b>\n\n"
+        f"<blockquote>"
+        f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Активируй промокод и получи бонус на баланс.\n\n"
+        f"<tg-emoji emoji-id=\"{EMOJI_FIRE}\">🔥</tg-emoji> Промокоды публикуются в нашем канале и чате."
+        f"</blockquote>\n\n"
+        f"<tg-emoji emoji-id=\"5907025791006283345\">💬</tg-emoji> <b><a href=\"https://t.me/your_support\">Тех. поддержка</a> | <a href=\"https://t.me/your_chat\">Наш чат</a> | <a href=\"https://t.me/your_news\">Новости</a></b>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_promo_menu()
+    )
+    await callback.answer()
+
+
+# ========== ПРОМОКОДЫ: ВВОД ==========
+@router.callback_query(F.data == "promo_enter")
+async def promo_enter_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(PromoState.entering_code)
+    await callback.message.edit_text(
+        f"<tg-emoji emoji-id=\"{EMOJI_PROMO}\">🎟</tg-emoji> <b>Введите промокод</b>\n\n"
+        f"<blockquote><i>Напишите код в чат — регистр не важен.</i></blockquote>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_promo_cancel_menu()
+    )
+    await callback.answer()
 
 
 # ========== ПРОФИЛЬ ==========
@@ -458,8 +631,8 @@ async def tower_command_handler(message: Message, state: FSMContext):
 @router.message(F.text)
 async def handle_text_message(message: Message, state: FSMContext):
     from payments import handle_amount_input
-    
-    # — КОМАНДА БАЛАНСА — отвечаем реплаем на сообщение пользователя —
+
+    # — КОМАНДА БАЛАНСА —
     if is_balance_command(message.text):
         balance = sync_balances(message.from_user.id)
         await message.reply(
@@ -471,8 +644,44 @@ async def handle_text_message(message: Message, state: FSMContext):
             reply_markup=get_balance_menu()
         )
         return
-    
+
     current_state = await state.get_state()
+
+    # ── Ввод промокода ──────────────────────────────────────────────────
+    if current_state == PromoState.entering_code.state:
+        code = message.text.strip()
+        ok, amount, reason = promo_use(code, message.from_user.id)
+
+        if ok:
+            storage.get_user(message.from_user.id)
+            storage.add_balance(message.from_user.id, amount)
+            new_balance = storage.get_balance(message.from_user.id)
+            await state.clear()
+            await message.answer(
+                f"<tg-emoji emoji-id=\"{EMOJI_CHECK}\">✅</tg-emoji> <b>Промокод активирован!</b>\n\n"
+                f"<blockquote>"
+                f"<tg-emoji emoji-id=\"{EMOJI_GIFT}\">🎁</tg-emoji> Начислено: <b><code>+{amount:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>\n"
+                f"<tg-emoji emoji-id=\"5278467510604160626\">💰</tg-emoji> Баланс: <b><code>{new_balance:.2f}</code></b> <tg-emoji emoji-id=\"5197434882321567830\">💰</tg-emoji>"
+                f"</blockquote>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="На главную", callback_data="back_to_main", icon_custom_emoji_id=EMOJI_BACK)
+                ]])
+            )
+        else:
+            error_texts = {
+                "not_found":    "Промокод не найден. Проверьте правильность ввода.",
+                "already_used": "Вы уже активировали этот промокод.",
+                "expired":      "Промокод больше не активен — все активации израсходованы.",
+            }
+            err_msg = error_texts.get(reason, "Неизвестная ошибка.")
+            await message.answer(
+                f"<tg-emoji emoji-id=\"{EMOJI_CROSS}\">❌</tg-emoji> <b>Ошибка активации</b>\n\n"
+                f"<blockquote>{err_msg}</blockquote>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=get_promo_cancel_menu()
+            )
+        return
 
     # ── Вывод реферального баланса ──────────────────────────────────────
     if current_state == ReferralWithdraw.entering_amount.state:
